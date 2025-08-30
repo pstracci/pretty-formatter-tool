@@ -1,103 +1,236 @@
-import Image from "next/image";
+// src/app/page.tsx
+'use client';
 
-export default function Home() {
+import { useState, useEffect, useCallback, useRef } from 'react';
+import CodeMirror from '@uiw/react-codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import { githubDark } from '@uiw/codemirror-theme-github';
+import { Settings, Code, Loader, AlertTriangle, Copy, Check, Upload, Download, FileCode } from 'lucide-react';
+
+const LINE_LIMIT = 1000;
+const PLACEHOLDER_TEXT = '// Cole seu código, ou selecione um arquivo para formatar...';
+
+export default function HomePage() {
+  const [inputCode, setInputCode] = useState<string>(PLACEHOLDER_TEXT);
+  const [formattedCode, setFormattedCode] = useState<string>('');
+  const [isFormatting, setIsFormatting] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('auto');
+  const [outputFileName, setOutputFileName] = useState<string>('formatted-code.txt');
+  const [copySuccess, setCopySuccess] = useState<boolean>(false);
+  const [lineCountError, setLineCountError] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // NOVO ESTADO: Controla se o placeholder está ativo
+  const [isPristine, setIsPristine] = useState<boolean>(true);
+
+  const formatCode = useCallback(async (codeToFormat: string, language: string) => {
+    // LÓGICA ATUALIZADA: Agora a validação bloqueia a execução
+    if (isPristine || !codeToFormat || codeToFormat.trim() === '') {
+      return;
+    }
+    const lines = codeToFormat.split('\n').length;
+    if (lines > LINE_LIMIT) {
+      setLineCountError(`Limite de ${LINE_LIMIT} linhas excedido para usuários free. A formatação está pausada.`);
+      return; // Impede a chamada da API
+    } else {
+      setLineCountError('');
+    }
+
+    setIsFormatting(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: codeToFormat, language: language }),
+      });
+
+      if (!response.ok) throw new Error('Erro na resposta do servidor.');
+
+      const data = await response.json();
+      
+      if (data.formattedCode === 'UNFORMATTABLE_TEXT') {
+        setError('Não foi possível formatar, tente outro texto.');
+        setFormattedCode(inputCode);
+      } else {
+        setFormattedCode(data.formattedCode);
+      }
+    } catch (err) {
+      setError('Ocorreu um erro. Tente novamente.');
+      console.error(err);
+    } finally {
+      setIsFormatting(false);
+    }
+  }, [isPristine, inputCode]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      formatCode(inputCode, selectedLanguage);
+    }, 1500);
+    return () => clearTimeout(handler);
+  }, [inputCode, selectedLanguage, formatCode]);
+
+  const onCodeChange = useCallback((value: string) => {
+    // LÓGICA ATUALIZADA: A validação agora acontece aqui, em tempo real
+    const lines = value.split('\n').length;
+    if (lines > LINE_LIMIT) {
+      setLineCountError(`Limite de ${LINE_LIMIT} linhas excedido para usuários free. A formatação está pausada.`);
+    } else {
+      setLineCountError('');
+    }
+    setInputCode(value);
+  }, []);
+  
+  const handleFocus = () => {
+    if (isPristine) {
+      setInputCode('');
+      setIsPristine(false);
+    }
+  };
+  
+  const handleCopy = () => {
+    if (!formattedCode) return;
+    navigator.clipboard.writeText(formattedCode);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const handleDownload = () => {
+    if (!formattedCode) return;
+    const blob = new Blob([formattedCode], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = outputFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+  
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setIsPristine(false); // Desativa o placeholder
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        setInputCode(text);
+      };
+      reader.readAsText(file);
+      setOutputFileName(`formatted-${file.name}`);
+    }
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="flex h-screen font-sans bg-gradient-to-br from-gray-900 to-slate-800">
+      <aside className="w-72 bg-gray-900/50 p-6 flex flex-col justify-between border-r border-gray-700">
+        {/* ... (o código da barra lateral continua o mesmo) ... */}
+         <div>
+          <h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2">
+            <FileCode /> Pretty Formatter
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">AI-Powered Code Formatting</p>
+          
+          <div className="mt-10 space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="language" className="text-sm font-semibold text-gray-300">Optimize for...</label>
+              <select 
+                id="language"
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              >
+                <option value="auto">Auto-Detect</option>
+                <option value="javascript">JavaScript</option>
+                <option value="typescript">TypeScript</option>
+                <option value="python">Python</option>
+                <option value="java">Java</option>
+                <option value="html">HTML</option>
+                <option value="css">CSS</option>
+                <option value="json">JSON</option>
+                <option value="yaml">YAML</option>
+                <option value="sql">SQL</option>
+                <option value="dockerfile">Dockerfile</option>
+                <option value="log-files">Log Files</option>
+              </select>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="filename" className="text-sm font-semibold text-gray-300">Download file as...</label>
+              <input 
+                type="text" 
+                id="filename"
+                value={outputFileName}
+                onChange={(e) => setOutputFileName(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+        <footer className="text-xs text-center text-gray-500">
+          Powered by Next.js & OpenAI
+        </footer>
+      </aside>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+      <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
+        <div className="flex flex-col rounded-lg overflow-hidden border border-gray-700">
+          <div className="bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-300 flex justify-between items-center">
+            <span>Entrada</span>
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 rounded transition-colors">
+              <Upload size={14}/> Selecionar Arquivo
+            </button>
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+          </div>
+          <CodeMirror
+            value={inputCode}
+            height="calc(100vh - 95px)"
+            theme={githubDark}
+            extensions={[javascript({ jsx: true, typescript: true })]}
+            onChange={onCodeChange}
+            onFocus={handleFocus} // NOVO: Limpa o placeholder ao focar
+            style={{ fontSize: '14px', fontFamily: 'var(--font-fira-code)' }}
+          />
+          {lineCountError && <div className="bg-red-900 text-red-200 text-center text-xs py-1 px-4">{lineCountError}</div>}
+        </div>
+
+        {/* ... (o código da caixa de saída continua o mesmo) ... */}
+        <div className="flex flex-col rounded-lg overflow-hidden border border-gray-700 bg-gray-800/50">
+          <div className="bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-300 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span>Saída Formatada</span>
+              {isFormatting && <Loader className="animate-spin text-emerald-400" size={18} />}
+            </div>
+            <div className="flex items-center gap-2">
+                <button onClick={handleCopy} className="flex items-center gap-2 px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 rounded transition-colors disabled:opacity-50" disabled={!formattedCode}>
+                  {copySuccess ? <><Check size={14}/> Copiado!</> : <><Copy size={14}/> Copiar</>}
+                </button>
+                <button onClick={handleDownload} className="flex items-center gap-2 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors disabled:opacity-50" disabled={!formattedCode}>
+                  <Download size={14}/> Baixar
+                </button>
+            </div>
+          </div>
+          <div className='relative h-full'>
+            {error && (
+               <div className='absolute inset-0 flex flex-col items-center justify-center text-center bg-gray-800 z-10 p-4'>
+                 <AlertTriangle className="text-red-400 mb-4" size={48} />
+                 <p className='text-red-400 font-semibold'>{error}</p>
+               </div>
+            )}
+            <CodeMirror
+              value={formattedCode}
+              height="calc(100vh - 60px)"
+              theme={githubDark}
+              extensions={[javascript({ jsx: true, typescript: true })]}
+              readOnly={true}
+              style={{ fontSize: '14px', fontFamily: 'var(--font-fira-code)' }}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
