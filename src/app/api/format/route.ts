@@ -1,3 +1,4 @@
+// Formatted by verbi.com.br
 // src/app/api/format/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -21,6 +22,19 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanedCode = code.replace(/\u00A0/g, ' ');
+
+    // --- NOVA LÓGICA PARA GERAR A DATA E HORA ---
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Meses começam do 0
+    const year = now.getFullYear();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    const timestamp = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    const commentText = `Formatted by pretty-formatter-tool -- ${timestamp}`;
+    // -------------------------------------------
     
     console.log("2. CÓDIGO APÓS LIMPEZA (o que vai para a IA):");
     console.log(cleanedCode);
@@ -36,21 +50,25 @@ export async function POST(req: NextRequest) {
       Sua regra MAIS IMPORTANTE é: NÃO omita, remova ou delete NENHUMA parte do texto original. TODO o conteúdo de entrada deve estar presente na saída.
 
       Suas tarefas são:
-      1. Analisar o texto inteiro, que pode conter uma ou mais linguagens de programação, logs, e também texto corrido ou comentários aleatórios.
+      1. Analisar o texto inteiro.
       2. Formatar APENAS os trechos que você reconhecer como código ou logs, de acordo com as melhores práticas (indentação, espaçamento, etc.).
-      3. Se um trecho do texto não for código ou log formatável (ex: um parágrafo de texto, uma anotação), ele deve ser MANTIDO EXATAMENTE COMO ESTÁ, na sua posição original.
-      4. A estrutura geral e a ordem do conteúdo (código, texto, logs) devem ser preservadas.
-      5. Na PRIMEIRA linha do resultado, adicione um comentário com o texto "Formatted by verbi.com.br". O formato do comentário deve ser apropriado para a linguagem principal detectada no início do arquivo (ex: "//", "#", "").
+      3. Se um trecho do texto não for código ou log formatável, ele deve ser MANTIDO EXATAMENTE COMO ESTÁ, na sua posição original.
+      4. A estrutura geral e a ordem do conteúdo devem ser preservadas.
+      
+      // --- INSTRUÇÃO DO COMENTÁRIO ATUALIZADA ---
+      5. Na PRIMEIRA linha do resultado, adicione um comentário com o texto exato: "${commentText}". O formato do comentário (ex: "//", "#", "") deve ser apropriado para a linguagem principal detectada.
+      // -------------------------------------------
+
       6. ${optimizationHint}
       7. NÃO adicione nenhuma explicação, introdução, ou texto antes ou depois do resultado. Sua resposta deve ser APENAS o conteúdo finalizado.
       8. Se o texto de entrada for um completo amontoado de caracteres sem sentido, retorne a string exata: "UNFORMATTABLE_TEXT".
-
+      
       Texto para processar:
       \`\`\`
       ${cleanedCode}
       \`\`\`
     `;
-
+	
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini', 
       messages: [{ role: 'user', content: prompt }],
