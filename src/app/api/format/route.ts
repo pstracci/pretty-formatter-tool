@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     
     const timestamp = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-    const commentText = `Formatted by pretty-formatter-tool -- ${timestamp}`;
+    const commentText = `Formatted by AI-formatter.com -- ${timestamp}`;
     // -------------------------------------------
     
     console.log("2. CÓDIGO APÓS LIMPEZA (o que vai para a IA):");
