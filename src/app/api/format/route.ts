@@ -2,6 +2,8 @@
 
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
+// ✨ CORREÇÃO: Importando o tipo específico para os chunks do stream da OpenAI ✨
+import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
 // Usando apenas a biblioteca oficial e estável da OpenAI
 const openai = new OpenAI({
@@ -11,7 +13,8 @@ const openai = new OpenAI({
 export const runtime = 'edge';
 
 // Função auxiliar para converter o stream da OpenAI em um formato que o navegador entende
-function OpenAIStream(stream: AsyncIterable<any>) {
+// ✨ CORREÇÃO: Trocando 'any' pelo tipo correto 'ChatCompletionChunk' ✨
+function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
   const encoder = new TextEncoder();
   return new ReadableStream({
     async start(controller) {

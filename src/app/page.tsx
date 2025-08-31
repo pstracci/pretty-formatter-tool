@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-// REMOVEMOS a importação de 'ai/react'
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { githubDark } from '@uiw/codemirror-theme-github';
@@ -11,7 +10,6 @@ const LINE_LIMIT = 1000;
 const PLACEHOLDER_TEXT = '// Paste your code, or select a file to format...';
 
 export default function HomePage() {
-  // VOLTAMOS a usar os estados manuais
   const [inputCode, setInputCode] = useState<string>(PLACEHOLDER_TEXT);
   const [formattedCode, setFormattedCode] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -24,7 +22,6 @@ export default function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPristine, setIsPristine] = useState<boolean>(true);
 
-  // NOVA FUNÇÃO 'formatCode' com fetch manual para streaming
   const formatCode = useCallback(async (codeToFormat: string, language: string) => {
     const lines = codeToFormat.split('\n').length;
     if (isPristine || !codeToFormat || codeToFormat.trim() === '' || lines > LINE_LIMIT) {
@@ -36,7 +33,7 @@ export default function HomePage() {
 
     setIsLoading(true);
     setError('');
-    setFormattedCode(''); // Limpa a saída anterior
+    setFormattedCode('');
 
     try {
       const response = await fetch('/api/format', {
@@ -52,7 +49,6 @@ export default function HomePage() {
         throw new Error('Response body is empty.');
       }
 
-      // Lógica para ler o stream
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       while (true) {
@@ -61,9 +57,14 @@ export default function HomePage() {
         const chunk = decoder.decode(value, { stream: true });
         setFormattedCode((prev) => prev + chunk);
       }
-    } catch (err: any) {
+    // ✨ CORREÇÃO: Trocando 'any' por 'unknown' e verificando o tipo do erro ✨
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'An error occurred while formatting.');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An error occurred while formatting.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -76,8 +77,6 @@ export default function HomePage() {
     return () => clearTimeout(handler);
   }, [inputCode, selectedLanguage, formatCode]);
   
-  // O resto do código (handlers de clique, JSX) é o mesmo,
-  // mas agora usa 'isLoading', 'error' e 'formattedCode' dos nossos próprios 'useState'.
   const onCodeChange = useCallback((value: string) => {
     const lines = value.split('\n').length;
     if (lines > LINE_LIMIT) {
@@ -96,16 +95,13 @@ export default function HomePage() {
     <div className="h-screen font-sans bg-gradient-to-br from-gray-900 to-slate-800 text-white flex flex-col">
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-72 bg-gray-900/50 p-6 flex flex-col justify-between border-r border-gray-700">
-           <div><h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2"><FileCode /> AI Formatter</h1><p className="text-sm text-gray-400 mt-1">AI-Powered Code Formatting</p><div className="mt-10 space-y-6"><div className="space-y-2"><label htmlFor="language" className="text-sm font-semibold text-gray-300">Optimize for...</label><select id="language" value={selectedLanguage} onChange={(e) => setSelectedLanguage(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-emerald-500 focus:border-emerald-500 text-sm"><option value="auto">Auto-Detect</option><option value="javascript">JavaScript</option><option value="typescript">TypeScript</option><option value="python">Python</option><option value="java">Java</option><option value="html">HTML</option><option value="css">CSS</option><option value="json">JSON</option><option value="yaml">YAML</option><option value="sql">SQL</option><option value="dockerfile">Dockerfile</option><option value="log-files">Log Files</option></select></div><div className="space-y-2"><label htmlFor="filename" className="text-sm font-semibold text-gray-300">Download file as...</label><input type="text" id="filename" value={outputFileName} onChange={(e) => setOutputFileName(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-emerald-500 focus:border-emerald-500 text-sm"/></div><div className="space-y-2 pt-6 border-t border-gray-700"><h3 className="text-sm font-semibold text-gray-300">Support This Project</h3><a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=paulo.stracci@gmail.com&item_name=Support+for+AI+Formatter+Tool&currency_code=USD" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-md transition-colors text-sm"><Coffee size={18} /> Buy me a Coffee</a></div></div></div><footer className="text-xs text-center text-gray-500">Powered by Next.js & OpenAI</footer>
-         {/* --- NOVA SEÇÃO ADICIONADA AQUI --- */}
+           <div><h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2"><FileCode /> AI Formatter</h1><p className="text-sm text-gray-400 mt-1">AI-Powered Code Formatting</p><div className="mt-10 space-y-6"><div className="space-y-2"><label htmlFor="language" className="text-sm font-semibold text-gray-300">Optimize for...</label><select id="language" value={selectedLanguage} onChange={(e) => setSelectedLanguage(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-emerald-500 focus:border-emerald-500 text-sm"><option value="auto">Auto-Detect</option><option value="javascript">JavaScript</option><option value="typescript">TypeScript</option><option value="python">Python</option><option value="java">Java</option><option value="html">HTML</option><option value="css">CSS</option><option value="json">JSON</option><option value="yaml">YAML</option><option value="sql">SQL</option><option value="dockerfile">Dockerfile</option><option value="log-files">Log Files</option></select></div><div className="space-y-2"><label htmlFor="filename" className="text-sm font-semibold text-gray-300">Download file as...</label><input type="text" id="filename" value={outputFileName} onChange={(e) => setOutputFileName(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-emerald-500 focus:border-emerald-500 text-sm"/></div><div className="space-y-2 pt-6 border-t border-gray-700"><h3 className="text-sm font-semibold text-gray-300">Support This Project</h3><a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=paulo.stracci@gmail.com&item_name=Support+for+AI+Formatter+Tool&currency_code=USD" target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-md transition-colors text-sm"><Coffee size={18} /> Buy me a Coffee</a></div></div></div>
             <div className="space-y-2 pt-6 border-t border-gray-700">
                 <h3 className="text-sm font-semibold text-gray-300">Try Other Tools</h3>
                 <Link href="/oracle-optimizer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
                   - Oracle Query Optimizer
                 </Link>
-                {/* Você pode adicionar mais links aqui no futuro */}
             </div>
-            {/* --- FIM DA NOVA SEÇÃO --- */}
 		</aside>
         <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
           <div className="flex flex-col rounded-lg overflow-hidden border border-gray-700">

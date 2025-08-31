@@ -1,3 +1,5 @@
+// src/app/oracle-optimizer/page.tsx
+
 'use client';
 import { useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
@@ -68,9 +70,14 @@ export default function OracleOptimizerPage() {
 
       const data = await response.json();
       setOptimizedQuery(data.optimizedQuery);
-
-    } catch (err: any) {
-      setError(err.message || 'An unknown error occurred. Check the console.');
+    
+    // ✨ CORREÇÃO: Trocando 'any' por 'unknown' e verificando o tipo do erro ✨
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred. Check the console.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +148,6 @@ export default function OracleOptimizerPage() {
                 {isLoading && <Loader className="animate-spin text-cyan-400" />}
             </div>
             <div className="border border-gray-600 rounded-lg overflow-hidden flex-grow">
-                {/* ✨ CORREÇÃO APLICADA AQUI: removido height="500px" ✨ */}
                 <CodeMirror value={optimizedQuery} extensions={[sql()]} readOnly={true} theme={githubDark} />
             </div>
             {optimizedQuery && !isLoading && (
