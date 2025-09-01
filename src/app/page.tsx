@@ -22,10 +22,10 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
           <section>
             <h3 className="text-lg font-semibold text-gray-100 mb-2">How to Use</h3>
             <ul className="list-disc list-inside space-y-2 text-sm">
-              <li>Paste your code directly into the "Input Code" panel.</li>
-              <li>Alternatively, click "Select File" to upload a code file from your computer.</li>
-              <li>The code will be formatted automatically in the "Formatted Output" panel after a short delay.</li>
-              <li>Use the "Optimize for..." dropdown menu to give the AI a hint about the code's language for better results.</li>
+              <li>Paste your code directly into the &quot;Input Code&quot; panel.</li>
+              <li>Alternatively, click &quot;Select File&quot; to upload a code file from your computer.</li>
+              <li>The code will be formatted automatically in the &quot;Formatted Output&quot; panel after a short delay.</li>
+              <li>Use the &quot;Optimize for...&quot; dropdown menu to give the AI a hint about the code&apos;s language for better results.</li>
               <li>Copy or download your formatted code using the buttons at the top right of the output panel.</li>
             </ul>
           </section>
