@@ -71,7 +71,6 @@ export default function OracleOptimizerPage() {
       const data = await response.json();
       setOptimizedQuery(data.optimizedQuery);
     
-    // ✨ CORREÇÃO: Trocando 'any' por 'unknown' e verificando o tipo do erro ✨
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -148,7 +147,13 @@ export default function OracleOptimizerPage() {
                 {isLoading && <Loader className="animate-spin text-cyan-400" />}
             </div>
             <div className="border border-gray-600 rounded-lg overflow-hidden flex-grow">
-                <CodeMirror value={optimizedQuery} extensions={[sql()]} readOnly={true} theme={githubDark} />
+                <CodeMirror
+                  value={optimizedQuery}
+                  height="650px"
+                  extensions={[sql()]}
+                  readOnly={true}
+                  theme={githubDark}
+                />
             </div>
             {optimizedQuery && !isLoading && (
               <div className="mt-4">
