@@ -111,7 +111,7 @@ export default function OracleOptimizerPage() {
             {tables.map((table) => (
               <div key={table.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 border border-gray-600 rounded-lg relative">
                 <button onClick={() => handleRemoveTable(table.id)} className="absolute top-2 right-2 text-red-500 hover:text-red-400"><XCircle size={18}/></button>
-                <input type="text" placeholder="Table Name (e.g., S_ASSET)" value={table.name} onChange={(e) => handleTableChange(table.id, 'name', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
+                <input type="text" placeholder="Table Name (e.g., TBL_USERS)" value={table.name} onChange={(e) => handleTableChange(table.id, 'name', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
                 <input type="text" placeholder="Size in GB (e.g., 1000)" value={table.size} onChange={(e) => handleTableChange(table.id, 'size', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
                 <input type="text" placeholder="Approx. Number of Columns (e.g., 70)" value={table.columns} onChange={(e) => handleTableChange(table.id, 'columns', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
                 <input type="text" placeholder="Indexed Fields (e.g., row_id)" value={table.indexes} onChange={(e) => handleTableChange(table.id, 'indexes', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>

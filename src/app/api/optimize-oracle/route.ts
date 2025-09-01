@@ -6,7 +6,6 @@ import { generateText } from 'ai';
 
 export const runtime = 'edge';
 
-// ✨ CORREÇÃO: Definindo um tipo para a informação da tabela ✨
 interface TableInfo {
   name: string;
   size: string;
@@ -24,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     let tableMetadata = 'No specific table metadata provided.';
     if (tables && tables.length > 0) {
-      // ✨ CORREÇÃO: Usando o tipo TableInfo em vez de 'any' ✨
+
       tableMetadata = tables.map((t: TableInfo) => 
         `- Table: ${t.name || 'N/A'}\n  Size: ${t.size || 'N/A'} GB\n  Approx. Columns: ${t.columns || 'N/A'}\n  Indexed Fields: ${t.indexes || 'None'}`
       ).join('\n');
