@@ -212,6 +212,8 @@ export default function HomePage() {
             </div>
           </div>
         </main>
+		
+		
       </div>
       <div className="bg-gray-900/70 text-gray-400 text-xs p-2 text-center border-t border-gray-700 flex-shrink-0">Disclaimer: This formatter is AI-powered and may produce errors. Always validate the output before 100% reliance.</div>
     </div>
