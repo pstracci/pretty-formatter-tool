@@ -7,10 +7,29 @@ const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 // Configure a Fira Code
 const firaCode = Fira_Code({ subsets: ["latin"], weight: ["400", "500"], variable: '--font-fira-code' });
 
+// Objeto de metadados otimizado para SEO
 export const metadata: Metadata = {
-  title: "Pretty Formatter Tool",
-  description: "Formate qualquer código usando o poder da IA.",
+  title: 'Free AI Code Formatter & Beautifier for JS, SQL, Python & More',
+  description: 'Instantly format and beautify your code with our free AI-powered tool. Supports JavaScript, Python, SQL, JSON, and more. Just paste your code and get clean, readable results.',
+  keywords: 'code formatter, free code formatter, AI code formatter, code beautifier, javascript formatter, python formatter, sql formatter, json formatter, auto formatter',
+  authors: [{ name: 'Paulo Stracci' }],
+  creator: 'Paulo Stracci',
+  publisher: 'Paulo Stracci',
+  openGraph: {
+    title: 'Free AI Code Formatter & Beautifier',
+    description: 'Instantly format and beautify your code with our free AI-powered tool. Supports multiple languages.',
+    url: 'https://ai-formatter.com',
+    siteName: 'AI Formatter',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Free AI Code Formatter & Beautifier',
+    description: 'Instantly format and beautify your code with our free AI-powered tool.',
+    creator: '@paulostracci', 
+  },
 };
+
 
 export default function RootLayout({
   children,
