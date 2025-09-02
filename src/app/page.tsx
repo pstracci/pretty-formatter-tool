@@ -22,6 +22,7 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
           <section>
             <h3 className="text-lg font-semibold text-gray-100 mb-2">How to Use</h3>
             <ul className="list-disc list-inside space-y-2 text-sm">
+                {/* CORREÇÃO: Usamos &quot; para as aspas */}
               <li>Paste your code directly into the &quot;Input Code&quot; panel.</li>
               <li>Alternatively, click &quot;Select File&quot; to upload a code file from your computer.</li>
               <li>The code will be formatted automatically in the &quot;Formatted Output&quot; panel after a short delay.</li>
@@ -49,7 +50,7 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
                     <p className="font-semibold text-gray-200">September 2025</p>
                     <ul className="list-disc list-inside mt-1">
                         <li>Fixed race condition bug with the Stop button.</li>
-                        <li>Added a "Clean" button to the input panel.</li>
+                        <li>Added a &quot;Clean&quot; button to the input panel.</li>
                     </ul>
                 </div>
                 <div>
@@ -92,7 +93,6 @@ export default function HomePage() {
       setLineCountError('');
     }
 
-    // ALTERAÇÃO: Criamos um controller específico para esta chamada.
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -134,8 +134,6 @@ export default function HomePage() {
         setError('An error occurred while formatting.');
       }
     } finally {
-      // ALTERAÇÃO: Só paramos o loading se esta for a requisição mais recente.
-      // Isso evita que uma requisição antiga cancelada afete a nova.
       if (abortControllerRef.current === controller) {
         setIsLoading(false);
         abortControllerRef.current = null;
@@ -148,8 +146,6 @@ export default function HomePage() {
       formatCode(inputCode, selectedLanguage);
     }, 1500);
 
-    // ALTERAÇÃO: A função de limpeza agora também aborta a requisição em andamento.
-    // Isso é executado sempre que o `inputCode` muda, antes de criar um novo timer.
     return () => {
         clearTimeout(handler);
         abortControllerRef.current?.abort();
