@@ -1,31 +1,16 @@
 // src/app/api/optimize-oracle/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-// ALTERAÇÃO: Trocamos a biblioteca da Vercel AI pela biblioteca oficial da OpenAI para ter controle do streaming
-import OpenAI from 'openai';
-import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
-
-// ALTERAÇÃO: Instanciamos o cliente oficial da OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Garanta que esta variável de ambiente exista no seu .env
-});
+import { openai } from '@ai-sdk/openai';
+import { generateText } from 'ai';
 
 export const runtime = 'edge';
 
-// ALTERAÇÃO: Adicionamos a função auxiliar para converter o stream da OpenAI para o formato do navegador
-function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    async start(controller) {
-      for await (const chunk of stream) {
-        const textChunk = chunk.choices[0]?.delta?.content || '';
-        if (textChunk) {
-          controller.enqueue(encoder.encode(textChunk));
-        }
-      }
-      controller.close();
-    },
-  });
+interface TableInfo {
+  name: string;
+  size: string;
+  columns: string;
+  indexes: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -33,7 +18,7 @@ export async function POST(req: NextRequest) {
     const { query, tables, parallel, isExecuteImmediate } = await req.json();
 
     if (!query) {
-      return new Response('Query is required.', { status: 400 });
+      return NextResponse.json({ error: 'Query is required.' }, { status: 400 });
     }
 
     let tableMetadata = 'No specific table metadata provided.';
@@ -41,9 +26,7 @@ export async function POST(req: NextRequest) {
     if (typeof tables === 'string' && tables.trim() !== '') {
       tableMetadata = `The user has provided the following metadata output from their database. Use this as the primary source of truth for table sizes, indexes, and structure:\n\n${tables}`;
     } else if (Array.isArray(tables) && tables.length > 0) {
-      // A entrada manual de tabelas permanece inalterada
-      const typedTables = tables as { name: string; size: string; columns: string; indexes: string; }[];
-      tableMetadata = typedTables.map((t) => 
+      tableMetadata = tables.map((t: TableInfo) => 
         `- Table: ${t.name || 'N/A'}\n  Size: ${t.size || 'N/A'} GB\n  Approx. Columns: ${t.columns || 'N/A'}\n  Indexed Fields: ${t.indexes || 'None'}`
       ).join('\n');
     }
@@ -56,7 +39,6 @@ export async function POST(req: NextRequest) {
       ? `**Special Instruction (Execute Immediate):** The user has indicated the query is a string from an \`EXECUTE IMMEDIATE\` block. You MUST first parse and reconstruct the clean, executable SQL from this string format (handling concatenations like '|| CHR(10) ||' and escaped quotes) before applying any optimization rules.`
       : '';
 
-    // O prompt do sistema continua o mesmo, com toda a sua lógica de otimização
     const systemPrompt = `You are an expert Oracle Database Performance Tuning specialist. Your task is to rewrite a given SQL query for maximum performance, applying a specific set of expert rules. You must act as a senior DBA with deep knowledge of Oracle's cost-based optimizer.
 
       **General Directives:**
@@ -81,38 +63,34 @@ export async function POST(req: NextRequest) {
           4. For all subsequent joins from this filtered table to other tables, use nested loops \`/*+ USE_NL(other_table) */\` and specify the index for the join key on the other table \`/*+ INDEX(other_table other_table_index) */\`.
           5. Only consider \`PARALLEL\` if your final plan does not use this index-driven strategy and relies on \`FULL\` scans.`;
 
-    // ALTERAÇÃO: Trocamos a chamada `generateText` por `openai.chat.completions.create` com `stream: true`
-    const responseStream = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      stream: true,
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: `Based on the rules provided, optimize the following Oracle SQL query.
+    const userPrompt = `Based on the rules provided, optimize the following Oracle SQL query.
 
-            **Table Metadata:**
-            ${tableMetadata}
-            
-            **Original Query:**
-            \`\`\`sql
-            ${query}
-            \`\`\`
-            `,
-        },
-      ],
-      temperature: 0.0,
+      **Table Metadata:**
+      ${tableMetadata}
+      
+      **Original Query:**
+      \`\`\`sql
+      ${query}
+      \`\`\`
+      `;
+
+    const { text } = await generateText({
+      model: openai('gpt-4o'), // Upgraded model for better reasoning
+      temperature: 0.0, // Set to 0 for deterministic, rule-following behavior
+      system: systemPrompt,
+      prompt: userPrompt,
     });
-    
-    // ALTERAÇÃO: Retornamos o stream diretamente
-    const stream = OpenAIStream(responseStream);
-    return new Response(stream);
+
+    const finalPromptForLogging = `#################### SYSTEM PROMPT ####################\n\n${systemPrompt}\n\n#################### USER PROMPT ####################\n\n${userPrompt}`;
+
+    return NextResponse.json({ 
+      optimizedQuery: text,
+      finalPrompt: finalPromptForLogging,
+    });
 
   } catch (error) {
-    console.error('Error with OpenAI API:', error);
-    return new Response('Error communicating with AI.', { status: 500 });
+    console.error('Error in API route:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

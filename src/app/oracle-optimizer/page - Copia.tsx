@@ -1,12 +1,11 @@
 // src/app/oracle-optimizer/page.tsx
 
 'use client';
-// ALTERAÇÃO: Adicionamos o ícone Eraser para o novo botão
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { githubDark } from '@uiw/codemirror-theme-github';
-import { Database, Zap, Loader, AlertTriangle, PlusCircle, XCircle, Wand2, UploadCloud, Clipboard, Check, Square, Eraser } from 'lucide-react';
+import { Database, Zap, Loader, AlertTriangle, PlusCircle, XCircle, Wand2, UploadCloud, Clipboard, Check } from 'lucide-react';
 import Link from 'next/link';
 
 interface TableInfo {
@@ -29,13 +28,14 @@ export default function OracleOptimizerPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // New states
   const [metadataTableNames, setMetadataTableNames] = useState<string>('EMPLOYEES, DEPARTMENTS');
   const [generatedMetadataQuery, setGeneratedMetadataQuery] = useState<string>('');
   const [metadataFileContent, setMetadataFileContent] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [isCopied, setIsCopied] = useState(false);
-
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // The final prompt state is no longer needed for the UI
+  // const [finalPrompt, setFinalPrompt] = useState<string>(''); 
 
 
   const handleAddTable = () => {
@@ -144,18 +144,12 @@ FROM
     if (generatedMetadataQuery) {
       navigator.clipboard.writeText(generatedMetadataQuery);
       setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
+      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
     }
   };
 
-  const handleOptimize = async () => {
-    // ALTERAÇÃO: Cancela qualquer otimização anterior antes de iniciar uma nova
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
 
+  const handleOptimize = async () => {
     setIsLoading(true);
     setError(null);
     setOptimizedQuery('');
@@ -176,58 +170,27 @@ FROM
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: controller.signal,
       });
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.statusText}`);
-      }
-      if (!response.body) {
-        throw new Error('Response body is empty.');
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setOptimizedQuery((prev) => prev + chunk);
-      }
+      const data = await response.json();
+      setOptimizedQuery(data.optimizedQuery);
+      // The final prompt is no longer displayed, so no need to set its state
+      // setFinalPrompt(data.finalPrompt);
     
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('Stream aborted by user.');
-        // ALTERAÇÃO: Removemos a exibição de erro ao parar
-      } else if (err instanceof Error) {
+      if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('An unknown error occurred while optimizing.');
+        setError('An unknown error occurred. Check the console.');
       }
     } finally {
-      // ALTERAÇÃO: Apenas para o loading se esta for a requisição mais recente
-      if (abortControllerRef.current === controller) {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-      }
+      setIsLoading(false);
     }
-  };
-
-  const handleStopStreaming = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  };
-
-  // ALTERAÇÃO: Nova função para limpar os painéis
-  const handleClean = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    setQuery('');
-    setOptimizedQuery('');
-    setError(null);
-    setExecuteImmediateString('');
   };
 
   const convertToExecuteImmediate = () => {
@@ -260,7 +223,7 @@ FROM
             <div className="space-y-4">
               <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
                 <p className="font-bold text-lg text-emerald-300">Option A: Generate Metadata Query</p>
-                <p className="text-sm text-gray-400 mb-3">Enter the most important tables from your query (comma-separated) to generate a SQL script. Run the script in your database and upload the result.</p>
+                <p className="text-sm text-gray-400 mb-3">Enter the tables from your query (comma-separated) to generate a SQL script. Run the script in your database and upload the result.</p>
                 <div className="flex gap-2">
                   <input type="text" placeholder="e.g., EMPLOYEES, DEPARTMENTS" value={metadataTableNames} onChange={(e) => setMetadataTableNames(e.target.value)} className="bg-gray-700 p-2 rounded text-sm w-full"/>
                   <button onClick={generateMetadataQuery} className="bg-cyan-700 hover:bg-cyan-800 p-2 rounded text-sm font-semibold">Generate Query</button>
@@ -320,14 +283,7 @@ FROM
                 {allowParallel && (<input type="number" value={parallelDegree} onChange={(e) => setParallelDegree(e.target.value)} className="bg-gray-700 p-2 rounded w-20 text-sm" placeholder="Degree"/>)}
               </div>
             </div>
-            
-            <div className="flex justify-between items-center mt-8 mb-4">
-                <h2 className="text-2xl font-semibold text-cyan-400">3. Query to Optimize</h2>
-                {/* ALTERAÇÃO: Adicionamos o botão de Clean aqui */}
-                <button onClick={handleClean} className="flex items-center gap-2 px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 rounded transition-colors" title="Clear content">
-                    <Eraser size={14}/> Clean
-                </button>
-            </div>
+            <h2 className="text-2xl font-semibold mt-8 mb-4 text-cyan-400">3. Query to Optimize</h2>
             <div className="border border-gray-600 rounded-lg overflow-hidden">
                 <CodeMirror value={query} height="300px" extensions={[sql()]} onChange={(value) => setQuery(value)} theme={githubDark} />
             </div>
@@ -338,19 +294,8 @@ FROM
 
           <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 flex flex-col">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-semibold text-cyan-400">Optimized Query</h2>
-              {isLoading && (
-                <div className="flex items-center gap-4">
-                  <Loader className="animate-spin text-cyan-400" />
-                  <button
-                    onClick={handleStopStreaming}
-                    className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
-                  >
-                    <Square size={12} fill="currentColor" />
-                    Stop
-                  </button>
-                </div>
-              )}
+                <h2 className="text-2xl font-semibold text-cyan-400">Optimized Query</h2>
+                {isLoading && <Loader className="animate-spin text-cyan-400" />}
             </div>
             <div className="border border-gray-600 rounded-lg overflow-hidden flex-grow">
                 <CodeMirror
@@ -366,9 +311,10 @@ FROM
                 <button onClick={convertToExecuteImmediate} className="w-full flex items-center justify-center gap-2 text-sm font-semibold bg-cyan-700 hover:bg-cyan-800 p-2 rounded-lg transition-colors">
                   <Wand2 size={16}/> Convert to `EXECUTE IMMEDIATE` string
                 </button>
-                {executeImmediateString && (<div className="mt-4 border border-gray-600 rounded-lg overflow-hidden"><CodeMirror value={executeImmediateString} extensions={[sql()]} readOnly={true} theme={githubDark} /></div>)}
+                {executeImmediateString && (<div className="mt-4 border border-gray-600 rounded-lg overflow-hidden"><CodeMirror value={executeImmediateString} extensions={[sql()]} readOnly={true} theme={githubDark}/></div>)}
               </div>
             )}
+            {/* The final prompt section has been removed */}
             {error && (
               <div className="mt-4 p-4 bg-red-900/50 border border-red-700 rounded-lg text-red-300">
                 <div className="flex items-center gap-2 font-bold"><AlertTriangle/> Error</div><p className="text-sm mt-2">{error}</p>

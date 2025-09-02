@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Inter, Fira_Code } from "next/font/google"; // Importe Fira Code
 import "./globals.css";
+import AuthProvider from './context/AuthProvider';
 
 const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 // Configure a Fira Code

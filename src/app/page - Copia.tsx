@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { githubDark } from '@uiw/codemirror-theme-github';
-import { FileCode, Upload, Download, Copy, Check, Loader, AlertTriangle, Coffee, Info, X, Square, Eraser } from 'lucide-react';
+import { FileCode, Upload, Download, Copy, Check, Loader, AlertTriangle, Coffee, Info, X } from 'lucide-react';
 import Link from 'next/link';
 
 const LINE_LIMIT = 1000;
@@ -46,13 +46,6 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
             <h3 className="text-lg font-semibold text-gray-100 mb-2">Changelog</h3>
             <div className="space-y-3 text-sm">
                 <div>
-                    <p className="font-semibold text-gray-200">September 2025</p>
-                    <ul className="list-disc list-inside mt-1">
-                        <li>Fixed race condition bug with the Stop button.</li>
-                        <li>Added a "Clean" button to the input panel.</li>
-                    </ul>
-                </div>
-                <div>
                     <p className="font-semibold text-gray-200">August 2025</p>
                     <ul className="list-disc list-inside mt-1">
                         <li>Initial launch of AI Formatter!</li>
@@ -80,8 +73,7 @@ export default function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPristine, setIsPristine] = useState<boolean>(true);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  
-  const abortControllerRef = useRef<AbortController | null>(null);
+
 
   const formatCode = useCallback(async (codeToFormat: string, language: string) => {
     const lines = codeToFormat.split('\n').length;
@@ -92,10 +84,6 @@ export default function HomePage() {
       setLineCountError('');
     }
 
-    // ALTERAÇÃO: Criamos um controller específico para esta chamada.
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
     setIsLoading(true);
     setError('');
     setFormattedCode('');
@@ -105,7 +93,6 @@ export default function HomePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeToFormat, language: language }),
-        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -124,22 +111,14 @@ export default function HomePage() {
         setFormattedCode((prev) => prev + chunk);
       }
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('Formatting aborted.');
-      } else if (err instanceof Error) {
-        console.error(err);
+      console.error(err);
+      if (err instanceof Error) {
         setError(err.message);
       } else {
-        console.error(err);
         setError('An error occurred while formatting.');
       }
     } finally {
-      // ALTERAÇÃO: Só paramos o loading se esta for a requisição mais recente.
-      // Isso evita que uma requisição antiga cancelada afete a nova.
-      if (abortControllerRef.current === controller) {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-      }
+      setIsLoading(false);
     }
   }, [isPristine]);
 
@@ -147,13 +126,7 @@ export default function HomePage() {
     const handler = setTimeout(() => {
       formatCode(inputCode, selectedLanguage);
     }, 1500);
-
-    // ALTERAÇÃO: A função de limpeza agora também aborta a requisição em andamento.
-    // Isso é executado sempre que o `inputCode` muda, antes de criar um novo timer.
-    return () => {
-        clearTimeout(handler);
-        abortControllerRef.current?.abort();
-    };
+    return () => clearTimeout(handler);
   }, [inputCode, selectedLanguage, formatCode]);
   
   const onCodeChange = useCallback((value: string) => {
@@ -165,32 +138,10 @@ export default function HomePage() {
     }
     setInputCode(value);
   }, []);
-
   const handleFocus = () => { if (isPristine) { setInputCode(''); setIsPristine(false); } };
   const handleCopy = () => { if (!formattedCode) return; navigator.clipboard.writeText(formattedCode); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); };
   const handleDownload = () => { if (!formattedCode) return; const blob = new Blob([formattedCode], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = outputFileName; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); };
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) { setIsPristine(false); const reader = new FileReader(); reader.onload = (e) => { const text = e.target?.result as string; setInputCode(text); }; reader.readAsText(file); setOutputFileName(`formatted-${file.name}`); } };
-  
-  const handleStopStreaming = () => {
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-    }
-  };
-
-  const handleClean = () => {
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-    }
-    setInputCode(PLACEHOLDER_TEXT);
-    setFormattedCode('');
-    setError('');
-    setLineCountError('');
-    setIsPristine(true);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
 
   return (
     <div className="h-screen font-sans bg-gradient-to-br from-gray-900 to-slate-800 text-white flex flex-col">
@@ -246,32 +197,13 @@ export default function HomePage() {
         <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
           <div className="flex flex-col rounded-lg overflow-hidden border border-gray-700">
             <div className="bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-300 flex justify-between items-center">
-              <span>Input Code</span>
-              <div className='flex items-center gap-2'>
-                <button onClick={handleClean} className="flex items-center gap-2 px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 rounded transition-colors" title="Clear content">
-                    <Eraser size={14}/> Clean
-                </button>
-                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 rounded transition-colors">
-                    <Upload size={14}/> Select File
-                </button>
-                <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-              </div>
+              <span>Input Code</span><button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 rounded transition-colors"><Upload size={14}/> Select File</button><input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
             </div>
             <CodeMirror value={inputCode} height="calc(100vh - 120px)" theme={githubDark} extensions={[javascript({ jsx: true, typescript: true })]} onChange={onCodeChange} onFocus={handleFocus} style={{ fontSize: '14px', fontFamily: 'var(--font-fira-code)' }}/>{lineCountError && <div className="bg-red-900 text-red-200 text-center text-xs py-1 px-4">{lineCountError}</div>}
           </div>
           <div className="flex flex-col rounded-lg overflow-hidden border border-gray-700 bg-gray-800/50">
             <div className="bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-300 flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span>Formatted Output</span>
-                {isLoading && (
-                    <div className='flex items-center gap-2'>
-                        <Loader className="animate-spin text-emerald-400" size={18} />
-                        <button onClick={handleStopStreaming} className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors" title="Stop generation">
-                           <Square size={10} fill="currentColor"/> Stop
-                        </button>
-                    </div>
-                )}
-              </div>
+              <div className="flex items-center gap-2"><span>Formatted Output</span>{isLoading && <Loader className="animate-spin text-emerald-400" size={18} />}</div>
               <div className="flex items-center gap-2"><button onClick={handleCopy} className="flex items-center gap-2 px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 rounded transition-colors disabled:opacity-50" disabled={!formattedCode || !!error}>{copySuccess ? <><Check size={14}/> Copied!</> : <><Copy size={14}/> Copy</>}</button><button onClick={handleDownload} className="flex items-center gap-2 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors disabled:opacity-50" disabled={!formattedCode || !!error}><Download size={14}/> Download</button></div>
             </div>
             <div className='relative h-full'>
