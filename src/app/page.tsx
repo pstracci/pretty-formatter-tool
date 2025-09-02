@@ -51,6 +51,7 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
                     <ul className="list-disc list-inside mt-1">
                         <li>Fixed race condition bug with the Stop button.</li>
                         <li>Added a &quot;Clean&quot; button to the input panel.</li>
+						<li>Added the &quot;Upload execution plan file&quot; funcionality  .</li>
                     </ul>
                 </div>
                 <div>

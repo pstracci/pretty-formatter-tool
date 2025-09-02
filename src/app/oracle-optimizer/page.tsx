@@ -1,7 +1,6 @@
 // src/app/oracle-optimizer/page.tsx
 
 'use client';
-// ALTERAÇÃO: Adicionamos o ícone Eraser para o novo botão
 import { useState, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
@@ -17,8 +16,11 @@ interface TableInfo {
   indexes: string;
 }
 
+const DEFAULT_QUERY = 'SELECT e.first_name, d.department_name FROM employees e JOIN departments d ON e.department_id = d.department_id WHERE e.salary > 50000;';
+
 export default function OracleOptimizerPage() {
-  const [query, setQuery] = useState<string>('SELECT e.first_name, d.department_name FROM employees e JOIN departments d ON e.department_id = d.department_id WHERE e.salary > 50000;');
+  const [query, setQuery] = useState<string>(DEFAULT_QUERY);
+  const [queryError, setQueryError] = useState<string | null>(null); 
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [allowParallel, setAllowParallel] = useState<boolean>(true);
   const [parallelDegree, setParallelDegree] = useState<string>('8');
@@ -34,22 +36,38 @@ export default function OracleOptimizerPage() {
   const [metadataFileContent, setMetadataFileContent] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [isCopied, setIsCopied] = useState(false);
+  const [copySuccess, setCopySuccess] = useState<boolean>(false);
+
+  const [executionPlan, setExecutionPlan] = useState<string | null>(null);
+  const [xmlFileName, setXmlFileName] = useState<string>('');
+  const [xmlError, setXmlError] = useState<string>('');
+  const [executionTime, setExecutionTime] = useState<string>('');
+  
+  const [optimizationSummary, setOptimizationSummary] = useState<string>('');
+  const [isInputPristine, setIsInputPristine] = useState<boolean>(true);
+  
+  // ADIÇÃO 1: Estado para a "key" do editor, para forçar sua recriação.
+  const [editorKey, setEditorKey] = useState(Date.now());
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const metadataFileRef = useRef<HTMLInputElement>(null);
+  const xmlFileRef = useRef<HTMLInputElement>(null);
 
 
-  const handleAddTable = () => {
-    setTables([...tables, { id: Date.now(), name: '', size: '', columns: '', indexes: '' }]);
-  };
-
-  const handleRemoveTable = (id: number) => {
-    setTables(tables.filter(table => table.id !== id));
-  };
-
-  const handleTableChange = (id: number, field: keyof TableInfo, value: string) => {
-    setTables(tables.map(table => table.id === id ? { ...table, [field]: value } : table));
-  };
+  const handleAddTable = () => setTables([...tables, { id: Date.now(), name: '', size: '', columns: '', indexes: '' }]);
+  const handleRemoveTable = (id: number) => setTables(tables.filter(table => table.id !== id));
+  const handleTableChange = (id: number, field: keyof TableInfo, value: string) => setTables(tables.map(table => table.id === id ? { ...table, [field]: value } : table));
   
+  const handleQueryChange = (value: string) => {
+    const lineCount = value.split('\n').length;
+    if (lineCount <= 400) {
+      setQuery(value);
+      setQueryError(null);
+    } else {
+      setQueryError('Query cannot exceed 400 lines.');
+    }
+  };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -65,12 +83,57 @@ export default function OracleOptimizerPage() {
     }
   };
 
+  const handleXmlFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setXmlError('');
+    setExecutionPlan(null);
+    setXmlFileName('');
+
+    if (file) {
+      if (file.type !== 'text/xml' && !file.name.toLowerCase().endsWith('.xml')) {
+        setXmlError('Error: File must be an XML.');
+        return;
+      }
+      if (file.size > 1024 * 1024) {
+        setXmlError('Error: File must be smaller than 1MB.');
+        return;
+      }
+      try {
+        const content = await file.text();
+        setExecutionPlan(content);
+        setXmlFileName(file.name);
+      } catch (err) {
+        setXmlError("Failed to read the XML file.");
+      }
+    }
+  };
+
+  const handleRemoveMetadataFile = () => {
+    setMetadataFileContent(null);
+    setUploadedFileName('');
+    if (metadataFileRef.current) {
+      metadataFileRef.current.value = '';
+    }
+  };
+  const handleRemoveXmlFile = () => {
+    setExecutionPlan(null);
+    setXmlFileName('');
+    setXmlError('');
+    if (xmlFileRef.current) {
+      xmlFileRef.current.value = '';
+    }
+  };
+
   const generateMetadataQuery = () => {
     const query = `
 WITH
   input_tables AS (
     SELECT
-      UPPER(TRIM(REGEXP_SUBSTR('${metadataTableNames}', '[^,]+', 1, LEVEL))) AS table_name
+      UPPER(
+        TRIM(
+          REGEXP_SUBSTR('${metadataTableNames}', '[^,]+', 1, LEVEL)
+        )
+      ) AS table_name
     FROM
       dual
     CONNECT BY
@@ -83,7 +146,12 @@ WITH
     FROM
       USER_SEGMENTS
     WHERE
-      segment_name IN (SELECT table_name FROM input_tables)
+      segment_name IN (
+        SELECT
+          table_name
+        FROM
+          input_tables
+      )
       AND segment_type LIKE 'TABLE%'
     GROUP BY
       segment_name
@@ -91,51 +159,75 @@ WITH
   index_summary AS (
     SELECT
       i.table_name,
-      XMLAGG(XMLElement("i", '    - ' || i.index_name || ' | Columns: (' || ic.column_list || ')' || CHR(10)) ORDER BY i.index_name).getClobVal() AS index_details
+      XMLAGG(
+        XMLElement(
+          "e",
+          '    - ' || i.index_name || ' | Columns: (' || ic.column_list || ')' || CHR(10)
+        )
+        ORDER BY
+          i.index_name
+      )
+      .extract('//text()')
+      .getClobVal() AS index_details
     FROM
       USER_INDEXES i
       JOIN (
         SELECT
           index_name,
-          LISTAGG(column_name, ', ') WITHIN GROUP (ORDER BY column_position) AS column_list
+          table_name,
+          LISTAGG(column_name, ', ') WITHIN GROUP (
+            ORDER BY
+              column_position
+          ) as column_list
         FROM
           USER_IND_COLUMNS
+        WHERE
+          table_name IN (
+            SELECT
+              table_name
+            FROM
+              input_tables
+          )
         GROUP BY
-          index_name
+          index_name,
+          table_name
       ) ic ON i.index_name = ic.index_name
-    WHERE
-      i.table_name IN (SELECT table_name FROM input_tables)
     GROUP BY
       i.table_name
   ),
   table_profiles AS (
     SELECT
       t.table_name,
-      '--------------------------------------------------------------------------------' || CHR(10) ||
-      '-- TABLE PROFILE: ' || t.table_name || CHR(10) ||
-      '--------------------------------------------------------------------------------' || CHR(10) ||
-      '  - Size_GB: ' || NVL(ts.size_gb, 0) || CHR(10) ||
-      '  - Estimated_Rows: ' || t.num_rows || CHR(10) ||
-      '  - Is_Partitioned: ' || t.partitioned || CHR(10) ||
-      '  - Tuning_Advice: ' ||
-        CASE
-          WHEN NVL(ts.size_gb, 0) > 700 THEN 'Extremely large table. AVOID FULL TABLE SCAN AT ALL COSTS. Use index.'
-          WHEN NVL(ts.size_gb, 0) < 1 THEN 'Small table. FULL TABLE SCAN is acceptable and can be efficient.'
-          ELSE 'Medium size table. Evaluate filters to decide between FULL SCAN and INDEX SCAN.'
-        END || CHR(10) ||
-      '  - Available_Indexes:' || CHR(10) ||
-      NVL(idx.index_details, '    - No indexes found.') AS formatted_profile
+      '--------------------------------------------------------------------------------' || CHR(10) || '-- TABLE PROFILE: ' || t.table_name || CHR(10) || '--------------------------------------------------------------------------------' || CHR(10) || '  - Size_GB: ' || NVL(ts.size_gb, 0) || CHR(10) || '  - Estimated_Rows: ' || t.num_rows || CHR(10) || '  - Is_Partitioned: ' || t.partitioned || CHR(10) || '  - Tuning_Advice: ' || CASE
+        WHEN NVL(ts.size_gb, 0) > 700 THEN 'Extremely large table. AVOID FULL TABLE SCAN AT ALL COSTS. Use index.'
+        WHEN NVL(ts.size_gb, 0) < 1 THEN 'Small table. FULL TABLE SCAN is acceptable and can be efficient.'
+        ELSE 'Medium size table. Evaluate filters to decide between FULL SCAN and INDEX SCAN.'
+      END || CHR(10) || '  - Available_Indexes:' || CHR(10) || NVL(idx.index_details, '    - No indexes found.') AS formatted_profile
     FROM
       USER_TABLES t
       LEFT JOIN table_sizes ts ON t.table_name = ts.table_name
       LEFT JOIN index_summary idx ON t.table_name = idx.table_name
     WHERE
-      t.table_name IN (SELECT table_name FROM input_tables)
+      t.table_name IN (
+        SELECT
+          table_name
+        FROM
+          input_tables
+      )
   )
 SELECT
-  REGEXP_REPLACE(XMLAGG(XMLElement("p", formatted_profile || CHR(10)) ORDER BY table_name).getClobVal(), '<[^>]+>', '')
+  XMLAGG(
+    XMLElement(
+      "p",
+      formatted_profile || CHR(10) || CHR(10)
+    )
+    ORDER BY
+      table_name
+  )
+  .extract('//text()')
+  .getClobVal()
 FROM
-  table_profiles;
+  table_profiles
     `.trim();
     setGeneratedMetadataQuery(query);
   };
@@ -148,8 +240,14 @@ FROM
     }
   };
 
+  const handleCopyOptimizedQuery = () => {
+    if (!optimizedQuery) return;
+    navigator.clipboard.writeText(optimizedQuery);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
   const handleOptimize = async () => {
-    // ALTERAÇÃO: Cancela qualquer otimização anterior antes de iniciar uma nova
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -160,6 +258,7 @@ FROM
     setError(null);
     setOptimizedQuery('');
     setExecuteImmediateString('');
+    setOptimizationSummary('');
 
     const payload = {
       query,
@@ -169,6 +268,8 @@ FROM
         degree: allowParallel ? parallelDegree : '1',
       },
       isExecuteImmediate: isExecuteImmediate,
+      executionPlan: executionPlan,
+      executionTime: executionTime,
     };
 
     try {
@@ -188,24 +289,40 @@ FROM
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let accumulatedResponse = '';
+      const separator = '---OPTIMIZATION_SUMMARY---';
+      let summaryStarted = false;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        
         const chunk = decoder.decode(value, { stream: true });
-        setOptimizedQuery((prev) => prev + chunk);
+        accumulatedResponse += chunk;
+
+        if (!summaryStarted && accumulatedResponse.includes(separator)) {
+          const parts = accumulatedResponse.split(separator);
+          setOptimizedQuery(parts[0].trim());
+          setOptimizationSummary(parts[1] || '');
+          summaryStarted = true;
+        } else {
+          if (summaryStarted) {
+            setOptimizationSummary(prev => prev + chunk);
+          } else {
+            setOptimizedQuery(accumulatedResponse);
+          }
+        }
       }
     
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
         console.log('Stream aborted by user.');
-        // ALTERAÇÃO: Removemos a exibição de erro ao parar
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
         setError('An unknown error occurred while optimizing.');
       }
     } finally {
-      // ALTERAÇÃO: Apenas para o loading se esta for a requisição mais recente
       if (abortControllerRef.current === controller) {
         setIsLoading(false);
         abortControllerRef.current = null;
@@ -219,15 +336,19 @@ FROM
     }
   };
 
-  // ALTERAÇÃO: Nova função para limpar os painéis
+  // ADIÇÃO 2: Função "Clean" corrigida para resetar o editor.
   const handleClean = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
     setQuery('');
-    setOptimizedQuery('');
-    setError(null);
-    setExecuteImmediateString('');
+    setQueryError(null);
+    setIsInputPristine(false);
+    setEditorKey(Date.now()); // Força a recriação do componente CodeMirror
+  };
+  
+  const handleQueryInputFocus = () => {
+    if (isInputPristine) {
+      setQuery('');
+      setIsInputPristine(false);
+    }
   };
 
   const convertToExecuteImmediate = () => {
@@ -256,7 +377,6 @@ FROM
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700">
             <h2 className="text-2xl font-semibold mb-4 text-cyan-400">1. Generate and Provide Table Metadata</h2>
-            
             <div className="space-y-4">
               <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
                 <p className="font-bold text-lg text-emerald-300">Option A: Generate Metadata Query</p>
@@ -268,7 +388,7 @@ FROM
                 {generatedMetadataQuery && (
                   <div className="mt-4">
                     <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-md font-semibold">Generated Query (Copy and run in your database):</h3>
+                        <h3 className="text-md font-semibold">Generated Query:</h3>
                         <button onClick={handleCopyToClipboard} className="flex items-center gap-2 px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded transition-colors">
                             {isCopied ? <Check size={14} className="text-emerald-400"/> : <Clipboard size={14} />}
                             {isCopied ? 'Copied!' : 'Copy'}
@@ -278,40 +398,27 @@ FROM
                        <CodeMirror value={generatedMetadataQuery} height="300px" extensions={[sql()]} readOnly={true} theme={githubDark} />
                     </div>
                      <div className="mt-4">
-                      <h3 className="text-md font-semibold mb-2">Upload the result file (txt, csv, etc.):</h3>
-                      <label className="w-full flex items-center justify-center gap-3 text-sm font-semibold bg-gray-700 hover:bg-gray-600 p-3 rounded-lg transition-colors cursor-pointer">
-                        <UploadCloud size={18} />
-                        {uploadedFileName ? `File: ${uploadedFileName}` : "Choose a file..."}
-                        <input type="file" className="hidden" onChange={handleFileChange} accept=".txt,.csv,.json,.xml" />
-                      </label>
+                      <h3 className="text-md font-semibold mb-2">Upload Metadata File:</h3>
+                      <div className="flex items-center gap-2">
+                        <label className="w-full flex items-center justify-center gap-3 text-sm font-semibold bg-gray-700 hover:bg-gray-600 p-3 rounded-lg transition-colors cursor-pointer">
+                            <UploadCloud size={18} />
+                            {uploadedFileName ? `File: ${uploadedFileName}` : "Choose a file..."}
+                            <input type="file" ref={metadataFileRef} className="hidden" onChange={handleFileChange} accept=".txt,.csv,.json,.xml" />
+                        </label>
+                        {uploadedFileName && (
+                            <button onClick={handleRemoveMetadataFile} className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors" title="Remove file">
+                                <XCircle size={18} />
+                            </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-
-              <div className="text-center font-bold text-gray-400">OR</div>
-
-              <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-                <p className="font-bold text-lg text-emerald-300">Option B: Enter Metadata Manually</p>
-                {tables.map((table) => (
-                  <div key={table.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4 p-4 border border-gray-600 rounded-lg relative">
-                    <button onClick={() => handleRemoveTable(table.id)} className="absolute top-2 right-2 text-red-500 hover:text-red-400"><XCircle size={18}/></button>
-                    <input type="text" placeholder="Table Name (e.g., EMPLOYEES)" value={table.name} onChange={(e) => handleTableChange(table.id, 'name', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
-                    <input type="text" placeholder="Size in GB (e.g., 10)" value={table.size} onChange={(e) => handleTableChange(table.id, 'size', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
-                    <input type="text" placeholder="Approx. Number of Columns (e.g., 15)" value={table.columns} onChange={(e) => handleTableChange(table.id, 'columns', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
-                    <input type="text" placeholder="Indexed Fields (e.g., employee_id)" value={table.indexes} onChange={(e) => handleTableChange(table.id, 'indexes', e.target.value)} className="bg-gray-700 p-2 rounded text-sm"/>
-                  </div>
-                ))}
-                <button onClick={handleAddTable} className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300"><PlusCircle size={16}/> Add Table</button>
-              </div>
             </div>
 
             <h2 className="text-2xl font-semibold mt-8 mb-4 text-cyan-400">2. Tuning Options</h2>
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={isExecuteImmediate} onChange={(e) => setIsExecuteImmediate(e.target.checked)} className="form-checkbox h-5 w-5 bg-gray-700 border-gray-600 rounded text-cyan-500 focus:ring-cyan-600"/>
-                <span>Query is an `EXECUTE IMMEDIATE` string</span>
-              </label>
+            <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={allowParallel} onChange={(e) => setAllowParallel(e.target.checked)} className="form-checkbox h-5 w-5 bg-gray-700 border-gray-600 rounded text-cyan-500 focus:ring-cyan-600"/>
@@ -319,18 +426,49 @@ FROM
                 </label>
                 {allowParallel && (<input type="number" value={parallelDegree} onChange={(e) => setParallelDegree(e.target.value)} className="bg-gray-700 p-2 rounded w-20 text-sm" placeholder="Degree"/>)}
               </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={isExecuteImmediate} onChange={(e) => setIsExecuteImmediate(e.target.checked)} className="form-checkbox h-5 w-5 bg-gray-700 border-gray-600 rounded text-cyan-500 focus:ring-cyan-600"/>
+                <span>Query is an `EXECUTE IMMEDIATE` string</span>
+              </label>
+            </div>
+            
+            <h3 className="text-xl font-semibold mt-6 mb-3 text-cyan-400">3. Optional Context</h3>
+            <div className="space-y-4 bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                <div>
+                    <label htmlFor="executionTime" className="text-sm font-semibold text-gray-300 mb-2 block">Current Execution Time (seconds)</label>
+                    <input type="number" id="executionTime" value={executionTime} onChange={(e) => setExecutionTime(e.target.value)} className="w-full bg-gray-700 p-2 rounded text-sm" placeholder="e.g., 120"/>
+                </div>
+                <div>
+                    <label className="text-sm font-semibold text-gray-300 mb-2 block">Upload Execution Plan (XML, &lt; 1MB)</label>
+                    <div className="flex items-center gap-2">
+                        <label className="w-full flex items-center justify-center gap-3 text-sm font-semibold bg-gray-700 hover:bg-gray-600 p-3 rounded-lg transition-colors cursor-pointer">
+                            <UploadCloud size={18} />
+                            {xmlFileName ? `File: ${xmlFileName}` : "Choose XML file..."}
+                            <input type="file" ref={xmlFileRef} className="hidden" onChange={handleXmlFileChange} accept="text/xml,.xml" />
+                        </label>
+                        {xmlFileName && (
+                            <button onClick={handleRemoveXmlFile} className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors" title="Remove file">
+                                <XCircle size={18} />
+                            </button>
+                        )}
+                    </div>
+                    {xmlError && <p className="text-red-400 text-xs mt-2">{xmlError}</p>}
+                </div>
             </div>
             
             <div className="flex justify-between items-center mt-8 mb-4">
-                <h2 className="text-2xl font-semibold text-cyan-400">3. Query to Optimize</h2>
-                {/* ALTERAÇÃO: Adicionamos o botão de Clean aqui */}
+                <h2 className="text-2xl font-semibold text-cyan-400">4. Query to Optimize</h2>
                 <button onClick={handleClean} className="flex items-center gap-2 px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 rounded transition-colors" title="Clear content">
                     <Eraser size={14}/> Clean
                 </button>
             </div>
             <div className="border border-gray-600 rounded-lg overflow-hidden">
-                <CodeMirror value={query} height="300px" extensions={[sql()]} onChange={(value) => setQuery(value)} theme={githubDark} />
+                {/* ADIÇÃO 3: Propriedade "key" para forçar o reset do componente. */}
+                <CodeMirror key={editorKey} value={query} height="200px" extensions={[sql()]} onChange={handleQueryChange} onFocus={handleQueryInputFocus} theme={githubDark} />
             </div>
+            {queryError && (
+              <p className="text-red-400 text-sm mt-2">{queryError}</p>
+            )}
             <button onClick={handleOptimize} disabled={isLoading || !query} className="w-full mt-6 flex items-center justify-center gap-3 text-lg font-bold bg-emerald-600 hover:bg-emerald-700 p-3 rounded-lg transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed">
               <Zap size={20}/>{isLoading ? 'Optimizing...' : 'Optimize Query'}
             </button>
@@ -338,39 +476,79 @@ FROM
 
           <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 flex flex-col">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-semibold text-cyan-400">Optimized Query</h2>
-              {isLoading && (
                 <div className="flex items-center gap-4">
-                  <Loader className="animate-spin text-cyan-400" />
-                  <button
-                    onClick={handleStopStreaming}
-                    className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
-                  >
-                    <Square size={12} fill="currentColor" />
-                    Stop
-                  </button>
+                    <h2 className="text-2xl font-semibold text-cyan-400">Optimized Query</h2>
+                    {isLoading && (
+                        <div className="flex items-center gap-4">
+                        <Loader className="animate-spin text-cyan-400" />
+                        <button onClick={handleStopStreaming} className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors">
+                            <Square size={12} fill="currentColor" />
+                            Stop
+                        </button>
+                        </div>
+                    )}
                 </div>
-              )}
+                <button onClick={handleCopyOptimizedQuery} className="flex items-center gap-2 px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 rounded transition-colors disabled:opacity-50" disabled={!optimizedQuery || isLoading}>
+                    {copySuccess ? <Check size={14} className="text-emerald-400"/> : <Clipboard size={14} />}
+                    {copySuccess ? 'Copied!' : 'Copy'}
+                </button>
             </div>
-            <div className="border border-gray-600 rounded-lg overflow-hidden flex-grow">
+            
+            <div className="border border-gray-600 rounded-lg overflow-hidden">
                 <CodeMirror
                   value={optimizedQuery}
-                  height="950px"
+                  height="450px"
                   extensions={[sql()]}
                   readOnly={true}
                   theme={githubDark}
                 />
             </div>
+
+            {optimizationSummary && !isLoading && (
+              <div className="mt-4 p-4 bg-gray-900/50 border border-gray-700 rounded-lg flex-shrink-0">
+                <h3 className="text-lg font-semibold text-cyan-400 mb-3">Optimization Summary</h3>
+                <div className="text-sm text-gray-300 space-y-2">
+                  {optimizationSummary.split('\n').map((line, index) => {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+                      return <p key={index} className="font-bold text-gray-100 mt-2">{trimmedLine.replace(/\*\*/g, '')}</p>;
+                    }
+                    if (trimmedLine.startsWith('-')) {
+                      return <li key={index} className="ml-4 list-disc">{trimmedLine.substring(1).trim()}</li>;
+                    }
+                    return line ? <p key={index}>{line}</p> : null;
+                  })}
+                </div>
+              </div>
+            )}
+            
             {optimizedQuery && !isLoading && (
-              <div className="mt-4">
+              <div className="mt-4 flex-shrink-0">
                 <button onClick={convertToExecuteImmediate} className="w-full flex items-center justify-center gap-2 text-sm font-semibold bg-cyan-700 hover:bg-cyan-800 p-2 rounded-lg transition-colors">
                   <Wand2 size={16}/> Convert to `EXECUTE IMMEDIATE` string
                 </button>
-                {executeImmediateString && (<div className="mt-4 border border-gray-600 rounded-lg overflow-hidden"><CodeMirror value={executeImmediateString} extensions={[sql()]} readOnly={true} theme={githubDark} /></div>)}
+                
+                {executeImmediateString && (
+                  <details className="mt-4" open>
+                    <summary className="cursor-pointer text-sm font-semibold text-gray-400 hover:text-white">
+                      View EXECUTE IMMEDIATE String
+                    </summary>
+                    <div className="mt-2 border border-gray-600 rounded-lg overflow-hidden">
+                      <CodeMirror 
+                        value={executeImmediateString}
+                        height="300px" 
+                        extensions={[sql()]}
+                        readOnly={true} 
+                        theme={githubDark} 
+                      />
+                    </div>
+                  </details>
+                )}
               </div>
             )}
+
             {error && (
-              <div className="mt-4 p-4 bg-red-900/50 border border-red-700 rounded-lg text-red-300">
+              <div className="mt-4 p-4 bg-red-900/50 border border-red-700 rounded-lg flex-shrink-0">
                 <div className="flex items-center gap-2 font-bold"><AlertTriangle/> Error</div><p className="text-sm mt-2">{error}</p>
               </div>
             )}

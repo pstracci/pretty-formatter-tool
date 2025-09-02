@@ -1,18 +1,15 @@
 // src/app/api/optimize-oracle/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
-// ALTERAÇÃO: Trocamos a biblioteca da Vercel AI pela biblioteca oficial da OpenAI para ter controle do streaming
+import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
-// ALTERAÇÃO: Instanciamos o cliente oficial da OpenAI
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Garanta que esta variável de ambiente exista no seu .env
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export const runtime = 'edge';
 
-// ALTERAÇÃO: Adicionamos a função auxiliar para converter o stream da OpenAI para o formato do navegador
 function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
   const encoder = new TextEncoder();
   return new ReadableStream({
@@ -30,84 +27,130 @@ function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { query, tables, parallel, isExecuteImmediate } = await req.json();
+    const { query, tables, parallel, isExecuteImmediate, executionPlan, executionTime } = await req.json();
 
     if (!query) {
       return new Response('Query is required.', { status: 400 });
     }
 
-    let tableMetadata = 'No specific table metadata provided.';
+    let tableMetadata = 'Nenhum metadado de tabela foi fornecido.';
     
     if (typeof tables === 'string' && tables.trim() !== '') {
-      tableMetadata = `The user has provided the following metadata output from their database. Use this as the primary source of truth for table sizes, indexes, and structure:\n\n${tables}`;
+      tableMetadata = `O usuário forneceu o seguinte output de metadados do seu banco de dados. Use isso como a principal fonte da verdade para tamanhos, índices e estrutura das tabelas:\n\n${tables}`;
     } else if (Array.isArray(tables) && tables.length > 0) {
-      // A entrada manual de tabelas permanece inalterada
       const typedTables = tables as { name: string; size: string; columns: string; indexes: string; }[];
       tableMetadata = typedTables.map((t) => 
-        `- Table: ${t.name || 'N/A'}\n  Size: ${t.size || 'N/A'} GB\n  Approx. Columns: ${t.columns || 'N/A'}\n  Indexed Fields: ${t.indexes || 'None'}`
+        `- Tabela: ${t.name || 'N/A'}\n  Tamanho: ${t.size || 'N/A'} GB\n  Colunas Aprox.: ${t.columns || 'N/A'}\n  Campos Indexados: ${t.indexes || 'Nenhum'}`
       ).join('\n');
     }
 
     const parallelHint = parallel.allowed
-      ? `Parallel execution is allowed up to a degree of ${parallel.degree}.`
-      : 'Parallel execution is not allowed.';
+      ? `A execução paralela é permitida com um grau de até ${parallel.degree}.`
+      : 'A execução paralela não é permitida.';
     
     const executeImmediateHint = isExecuteImmediate
-      ? `**Special Instruction (Execute Immediate):** The user has indicated the query is a string from an \`EXECUTE IMMEDIATE\` block. You MUST first parse and reconstruct the clean, executable SQL from this string format (handling concatenations like '|| CHR(10) ||' and escaped quotes) before applying any optimization rules.`
+      ? `**Instrução Especial (Execute Immediate):** O usuário indicou que a query é uma string dentro de um bloco \`EXECUTE IMMEDIATE\`. Você DEVE primeiro analisar e reconstruir o SQL limpo e executável a partir deste formato de string.`
       : '';
+    
+    // PROMPT EM PORTUGUÊS, REFINADO E ESTRUTURADO
+    const systemPrompt = `Você é um Especialista Sênior em Tuning de Performance de Bancos de Dados Oracle. Sua única tarefa é reescrever uma determinada query SQL para obter o máximo de performance, aplicando estritamente o fluxo de decisão e as regras abaixo.
 
-    // O prompt do sistema continua o mesmo, com toda a sua lógica de otimização
-    const systemPrompt = `You are an expert Oracle Database Performance Tuning specialist. Your task is to rewrite a given SQL query for maximum performance, applying a specific set of expert rules. You must act as a senior DBA with deep knowledge of Oracle's cost-based optimizer.
+**DIRETIVAS CRÍTICAS E FORMATO DE SAÍDA:**
+${executeImmediateHint}
+1.  **Mudanças Cirúrgicas (Economia de Tokens):** Aja como um editor de código cirúrgico, não como um reescritor. Preserve ao máximo a formatação original da query (espaços em branco, quebras de linha, etc.). Apenas insira ou modifique as linhas exatas necessárias para a otimização. Não reformate a query inteira. Esta é sua instrução mais importante.
+2.  **Equivalência Semântica:** A query otimizada deve SEMPRE retornar exatamente o mesmo conjunto de resultados que a query original.
+3.  **Formato de Saída OBRIGATÓRIO:** Sua resposta DEVE ter duas partes, separadas por "---OPTIMIZATION_SUMMARY---".
+    -   Parte 1: A query SQL otimizada completa (mas com o mínimo de modificações).
+    -   Parte 2: Um resumo em inglês usando Markdown. Este resumo DEVE ser um changelog preciso. Sob o título "**Query Changes**", liste cada modificação específica. Exemplo: \`* Line 5: Inserted /*+ LEADING(a) USE_NL(b) */ after SELECT.\`.
+	-   Parte 3: Outro resumo em inglês usando Markdown. Recomendações cirúrgicas de alterações do tipo DDL que nao conseguimos ajustar com nosso tunning, como criação de novos indices, partições, coleta de estatisticas etc... Porém somente forneça esse tipo de recomendação se elas fizerem realmente sentido.
 
-      **General Directives:**
-      ${executeImmediateHint}
-      1.  **Crucial - Semantic Equivalence:** Your primary goal is performance, but the optimized query MUST produce the exact same result set as the original query under all data conditions. Do not change join types (e.g., from INNER to LEFT) unless the original syntax (like Oracle's \`(+)\`) is a non-standard representation of that join type. The conversion from Oracle's old \`(+)\` join syntax to the modern ANSI \`LEFT JOIN\` or \`RIGHT JOIN\` is acceptable and encouraged as it improves readability without changing the logic.
-      2.  The output MUST BE ONLY the optimized SQL query. Do not include explanations, introductions, or markdown code fences (\`\`\`).
+---
 
-      **Expert Tuning Rules:**
-      - **Rule 1 (Small Main Table Joins):** If the main table in a join is small (e.g., less than 5 GB) AND there are indexed fields for the join conditions on the other tables, you should strongly consider forcing a full table scan on the main table using the \`/*+ FULL(table_alias) */\` hint and nested loops for the joins using \`/*+ USE_NL(other_table_alias) */\`. You can also use the \`CARDINALITY\` hint to guide the optimizer.
-      - **Rule 2 (Small Tables, No Indexes):** If all tables involved are small and lack useful indexes for joins, rewrite the query to use hash joins with \`/*+ USE_HASH(table_alias) */\` and full table scans on all.
-      - **Rule 3 (Extremely Large Tables):** If a table's metadata indicates it is extremely large (e.g., over 700 GB), you must prioritize an index-based access path. **Never** use a \`/*+ FULL(table_alias) */\` hint on such a table, as a full scan would be catastrophic for performance. Your main goal becomes avoiding a full table scan on this table at all costs.
-      - **Rule 4 (Avoid 'OR'):** The \`OR\` clause on different columns is often inefficient. If you encounter an \`OR\` clause, rewrite the query to use a \`UNION ALL\` structure, where each part of the union handles one of the original conditions.
-      - **Rule 5 (Window Functions):** If you see a query accessing the same table multiple times just to get a maximum value within a group (e.g., using a subquery with MAX and joining back), you should prioritize rewriting it using window functions like \`MAX(...) OVER (PARTITION BY ...)\` to access the table only once.
-      - **Rule 6 (Freedom to Optimize):** If the user does not provide any table metadata (size, indexes), you have the freedom to optimize the query based on its structure alone, applying general best practices. The rules above are your primary guide when metadata is available.
-      - **Rule 6.1 (Dealing with CREATE TABLE AS):** If the user has provided metadata that indicates the possibility of paralelism, CREATE TABLE AS commands must be incremented with \`NOLOGGING PARALLEL (DEGREE 'XYZ')\` clausules
-	  - **Rule 7 (Parallelism):** The user's preference is: "${parallelHint}". You should interpret this as follows: You *may* use a parallel hint if the optimal plan involves large full table scans. However, for highly selective, index-driven queries (as guided by Rule 9), parallelism is often detrimental and **should be avoided**, even if allowed.
-      - **Rule 8 (Correct Hint Placement):** This is a strict rule. All hints MUST be placed immediately after the \`SELECT\` keyword, in the format \`SELECT /*+ HINT_TEXT */ ...\`. If the query contains a \`UNION\` or \`UNION ALL\`, the hint must be placed inside each specific \`SELECT\` statement of the union that requires it, not at the end of the entire query.
-      - **Rule 9 (The Master Plan):** Follow this thinking process:
-          1. First, look at the \`WHERE\` clause. Identify the table with the most selective filter (the one that will return the fewest rows).
-          2. Check the metadata for that table. Does an index exist on the filtered column? Your metadata contains a "Tuning_Advice" line for a reason.
-          3. If yes, your primary strategy MUST be to use that index. Start your hints with \`/*+ INDEX(table_alias index_name) */\`.
-          4. For all subsequent joins from this filtered table to other tables, use nested loops \`/*+ USE_NL(other_table) */\` and specify the index for the join key on the other table \`/*+ INDEX(other_table other_table_index) */\`.
-          5. Only consider \`PARALLEL\` if your final plan does not use this index-driven strategy and relies on \`FULL\` scans.`;
+**FLUXO DE DECISÃO E REGRAS DE TUNING:**
+Você DEVE seguir esta hierarquia de regras ao otimizar a query:
 
-    // ALTERAÇÃO: Trocamos a chamada `generateText` por `openai.chat.completions.create` com `stream: true`
+**1. Regra Mestra: A Preferência do Usuário Sobre Paralelismo**
+- Esta é uma instrução estrita baseada na preferência do usuário: "${parallelHint}".
+- Se "não for permitido", você NUNCA deve incluir a palavra-chave ou a hint \`PARALLEL\`. Sem exceções.
+- Se "for permitido", você só pode usar a hint \`PARALLEL\` se o plano de execução ideal envolver grandes FULL TABLE SCANS (conforme a Estratégia Principal abaixo). Nunca a use para queries guiadas por índices.
+
+**2. Regra de Ouro: Validade dos Índices**
+- Você SÓ PODE usar hints para índices que estão explicitamente listados nos metadados fornecidos.
+- NUNCA sugira um índice cujas colunas não tenham relação com os predicados da query (cláusulas WHERE/JOIN). Isso é uma falha crítica.
+- A sintaxe correta da hint é \`/*+ INDEX(alias_tabela nome_indice) */\`.
+
+**3. Estratégia de Otimização Principal (baseada no tamanho da tabela):**
+Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratégias:
+
+-   **Cenário A: Tabelas Extremamente Grandes (> 700 GB)**
+    -   A prioridade máxima é o acesso via índice.
+    -   NUNCA use hints de \`FULL SCAN\` nestas tabelas.
+    -   Identifique o filtro mais seletivo e use o índice correspondente (seguindo a Regra de Ouro) para guiar a query.
+    -   Use \`USE_NL\` e \`INDEX\` para as junções subsequentes.
+
+-   **Cenário B: Tabela Principal Pequena/Média (< 5 GB ou a menor da query)**
+    -   Esta é a sua estratégia padrão. Acesso inicial pela menor tabela.
+    -   Force um \`FULL SCAN\` nela com \`/*+ FULL(alias_tabela_principal) */\`.
+    -   Se o paralelismo for permitido (Regra Mestra), adicione \`/*+ PARALLEL(grau) */\`.
+    -   Force o otimizador a começar por ela com a hint \`/*+ CARDINALITY(alias_tabela_principal 1) */\`.
+    -   Para as junções com as demais tabelas, use Nested Loops com \`/*+ USE_NL(alias_outra_tabela) */\`, garantindo que as colunas de junção nas outras tabelas sejam indexadas (use \`/*+ INDEX(...) */\` seguindo a Regra de Ouro).
+
+-   **Cenário C: Múltiplas Tabelas Pequenas Sem Índices Úteis**
+    -   Se as tabelas são pequenas e não há índices bons para as junções, a melhor opção é Hash Join.
+    -   Use hints de \`/*+ USE_HASH(alias_tabela) */\` e permita \`FULL SCANS\`.
+
+**4. Otimizações Adicionais:**
+- **Evitar OR:** Sempre que possível, reescreva condições com \`OR\` usando \`UNION ALL\` para melhor performance.
+- **Subqueries:** Para subqueries com \`EXISTS\` ou \`NOT EXISTS\`, sempre adicione a hint \`/*+ UNNEST */\`.
+- **\`CREATE TABLE AS\` (CTAS):** Se a query for um CTAS e o paralelismo for permitido (Regra Mestra), adicione \`NOLOGGING PARALLEL\`.
+- **Posicionamento das Hints:** Coloque todas as hints imediatamente após a palavra-chave \`SELECT\`.
+- **Contexto Opcional:** Use o Plano de Execução e o Tempo de Execução atuais como referências, mas sem sobrescrever as regras principais.
+`;
+    
+    let optionalContext = '';
+    if (executionPlan) {
+        optionalContext += `\n\n**Plano de Execução Atual (XML):**\n\`\`\`xml\n${executionPlan}\n\`\`\``;
+    }
+    if (executionTime) {
+        optionalContext += `\n\n**Tempo de Execução Atual Reportado:** ${executionTime} segundos.`;
+    }
+
+    const userPrompt = `Baseado nas suas regras (especialmente "Mudanças Cirúrgicas" e o resumo "Changelog Summary" obrigatório), otimize a seguinte query Oracle SQL.
+
+        **Metadados das Tabelas:**
+        ${tableMetadata}
+        
+        **Query Original:**
+        \`\`\`sql
+        ${query}
+        \`\`\`
+        ${optionalContext} 
+        `;
+
+    // --- SELEÇÃO DINÂMICA DE MODELO ---
+    const inputText = systemPrompt + userPrompt;
+    // Estimativa simples de tokens: média de 4 caracteres por token.
+    const tokenEstimate = inputText.length / 4;
+
+    // Use o modelo que o usuário especificou.
+    let model = 'gpt-4o'; // Melhor custo-benefício: mais barato e melhor que o gpt-3.5-turbo
+    if (tokenEstimate > 4000) { 
+      model = 'gpt-4o'; // Melhor performance: mais poderoso e mais barato que o gpt-4-turbo
+    }
+    // --- FIM DA LÓGICA DINÂMICA ---
+
     const responseStream = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: model, 
       stream: true,
       messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: `Based on the rules provided, optimize the following Oracle SQL query.
-
-            **Table Metadata:**
-            ${tableMetadata}
-            
-            **Original Query:**
-            \`\`\`sql
-            ${query}
-            \`\`\`
-            `,
-        },
+        { role: 'system', content: systemPrompt, },
+        { role: 'user', content: userPrompt, },
       ],
-      temperature: 0.0,
+      temperature: 1,
+
+      max_completion_tokens: 8192, 
     });
     
-    // ALTERAÇÃO: Retornamos o stream diretamente
     const stream = OpenAIStream(responseStream);
     return new Response(stream);
 
