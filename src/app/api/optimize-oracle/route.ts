@@ -14,7 +14,7 @@ const openai = new OpenAI({
   },
 });
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
   const encoder = new TextEncoder();
@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
     }
 
     let tableMetadata = 'Nenhum metadado de tabela foi fornecido.';
-    
     if (typeof tables === 'string' && tables.trim() !== '') {
       tableMetadata = `O usuário forneceu o seguinte output de metadados do seu banco de dados. Use isso como a principal fonte da verdade para tamanhos, índices e estrutura das tabelas:\n\n${tables}`;
     } else if (Array.isArray(tables) && tables.length > 0) {
@@ -57,7 +56,7 @@ export async function POST(req: NextRequest) {
     const executeImmediateHint = isExecuteImmediate
       ? `**Instrução Especial (Execute Immediate):** O usuário indicou que a query é uma string dentro de um bloco \`EXECUTE IMMEDIATE\`. Você DEVE primeiro analisar e reconstruir o SQL limpo e executável a partir deste formato de string.`
       : '';
-    
+
     const systemPrompt = `Você é um Especialista Sênior em Tuning de Performance de Bancos de Dados Oracle. Sua única tarefa é reescrever uma determinada query SQL para obter o máximo de performance, aplicando estritamente o fluxo de decisão e as regras abaixo.
 
 **DIRETIVAS CRÍTICAS E FORMATO DE SAÍDA:**
@@ -132,32 +131,49 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
         ${optionalContext} 
         `;
 
-    const inputText = systemPrompt + userPrompt;
-    const tokenEstimate = inputText.length / 4;
+    // LÓGICA DE SELEÇÃO DE MODELO E FALLBACK
+    const primaryModel = process.env.OPTIMIZER_MODEL_PRIMARY  
+    const fallbackModel = process.env.OPTIMIZER_MODEL_FALLBACK  
+    
+    const tokenEstimate = (systemPrompt + userPrompt).length / 4;
+    console.log(`[Oracle Optimizer] Request received. Approx. tokens: ${Math.round(tokenEstimate)}`);
 
-    // ***** ALTERAÇÃO APLICADA AQUI *****
-    // Lógica de seleção de modelo CORRIGIDA para usar DeepSeek via OpenRouter
-    let model = 'deepseek/deepseek-chat-v3.1:free'; // Modelo rápido e eficiente para tarefas comuns
-    if (tokenEstimate > 10000) { 
-      model = 'openai/gpt-4o'; // Modelo especialista em código para queries complexas
+    let responseStream;
+    const completionParams = {
+        stream: true,
+        messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.0,
+        max_completion_tokens: 8192,
+    };
+
+    try {
+        // Tentativa 1: Usar o modelo primário
+        console.log(`[Oracle Optimizer] Attempting with primary model: ${primaryModel}`);
+        responseStream = await openai.chat.completions.create({
+            ...completionParams,
+            model: primaryModel,
+        });
+    } catch (error) {
+        console.warn(`[Oracle Optimizer] Primary model (${primaryModel}) failed. Retrying with fallback: ${fallbackModel}. Error:`, error);
+        
+        if (!fallbackModel) throw error; // Se não houver fallback, relança o erro original
+
+        // Tentativa 2: Usar o modelo de fallback
+        console.log(`[Oracle Optimizer] Attempting with fallback model: ${fallbackModel}`);
+        responseStream = await openai.chat.completions.create({
+            ...completionParams,
+            model: fallbackModel,
+        });
     }
-
-    const responseStream = await openai.chat.completions.create({
-      model: model, 
-      stream: true,
-      messages: [
-        { role: 'system', content: systemPrompt, },
-        { role: 'user', content: userPrompt, },
-      ],
-      temperature: 0.0,
-      max_completion_tokens: 8192, 
-    });
     
     const stream = OpenAIStream(responseStream);
     return new Response(stream);
 
   } catch (error) {
-    console.error('Error with API:', error);
+    console.error(`[Oracle Optimizer] Falha ao otimizar com ambos os modelos. Erro final:`, error);
     return new Response('Error communicating with AI.', { status: 500 });
   }
 }

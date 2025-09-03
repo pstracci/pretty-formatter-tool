@@ -4,18 +4,17 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
-// ALTERAÇÃO 1: Cliente configurado para usar a API do OpenRouter
+// Cliente configurado para usar a API do OpenRouter
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Sua chave do OpenRouter (do arquivo .env.local)
-  baseURL: process.env.OPENROUTER_BASE_URL, // A URL do OpenRouter (do arquivo .env.local)
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENROUTER_BASE_URL,
   defaultHeaders: {
-    // Cabeçalhos recomendados pelo OpenRouter
     "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
     "X-Title": "AI Formatter", 
   },
 });
 
-export const runtime = 'edge';
+//export const runtime = 'edge';
 
 function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
   const encoder = new TextEncoder();
@@ -54,15 +53,8 @@ export async function POST(req: NextRequest) {
     const optimizationHint = (language && language !== 'auto') 
       ? `The user has provided a hint that the content is '${language}'. Pay special attention to formatting it according to the best practices for this format.`
       : '';
-
-    const responseStream = await openai.chat.completions.create({
-      // ALTERAÇÃO 2: Nome do modelo atualizado para um modelo gratuito da DeepSeek
-      model: 'deepseek/deepseek-chat-v3.1:free',
-      stream: true,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert code formatter and content preserver. Your only function is to receive text and return it formatted.
+    
+    const systemContent = `You are an expert code formatter and content preserver. Your only function is to receive text and return it formatted.
 Your MOST IMPORTANT rule is: DO NOT omit, remove, or delete ANY part of the original text. ALL input content must be present in the output.
 Your tasks are:
 1. Analyze the entire text.
@@ -72,21 +64,53 @@ Your tasks are:
 5. On the VERY FIRST line of the result, add a comment with the exact text: "${commentText}". The comment format (e.g., "//", "#", "") must be appropriate for the main language detected.
 6. ${optimizationHint}
 7. DO NOT add any explanation, introduction, or text before or after the result. Your response must be ONLY the finalized content.
-8. If the input text is complete gibberish, return the exact string: "UNFORMATTABLE_TEXT".`
-        },
-        {
-          role: 'user',
-          content: `Please process the following text block:\n\`\`\`\n${cleanedCode}\n\`\`\` `
-        }
-      ],
-      temperature: 0.1,
-    });
+8. If the input text is complete gibberish, return the exact string: "UNFORMATTABLE_TEXT".`;
+    
+    const userContent = `Please process the following text block:\n\`\`\`\n${cleanedCode}\n\`\`\``;
+
+    // LÓGICA DE SELEÇÃO DE MODELO E FALLBACK
+    const primaryModel = process.env.FORMATTER_MODEL_PRIMARY || 'deepseek/chat';
+    const fallbackModel = process.env.FORMATTER_MODEL_FALLBACK || 'openai/gpt-4o-mini';
+    
+    const tokenEstimate = (systemContent + userContent).length / 4;
+    console.log(`[Formatter] Request received. Approx. tokens: ${Math.round(tokenEstimate)}`);
+
+    let responseStream;
+    const completionParams = {
+        stream: true,
+        messages: [
+            { role: 'system', content: systemContent },
+            { role: 'user', content: userContent }
+        ],
+        temperature: 0.1,
+		max_completion_tokens: 8192, 
+    };
+
+    try {
+        // Tentativa 1: Usar o modelo primário
+        console.log(`[Formatter] Attempting with primary model: ${primaryModel}`);
+        responseStream = await openai.chat.completions.create({
+            ...completionParams,
+            model: primaryModel,
+        });
+    } catch (error) {
+        console.warn(`[Formatter] Primary model (${primaryModel}) failed. Retrying with fallback: ${fallbackModel}. Error:`, error);
+        
+        if (!fallbackModel) throw error; // Se não houver fallback, relança o erro original
+
+        // Tentativa 2: Usar o modelo de fallback
+        console.log(`[Formatter] Attempting with fallback model: ${fallbackModel}`);
+        responseStream = await openai.chat.completions.create({
+            ...completionParams,
+            model: fallbackModel,
+        });
+    }
     
     const stream = OpenAIStream(responseStream);
     return new Response(stream);
 
   } catch (error) {
-    console.error('Error with API:', error); // Mensagem de erro genérica
+    console.error(`[Formatter] Falha ao formatar com ambos os modelos. Erro final:`, error);
     return new Response('Error communicating with AI.', { status: 500 });
   }
 }
