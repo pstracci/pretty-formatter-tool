@@ -14,6 +14,7 @@ const openai = new OpenAI({
   },
 });
 
+
 //export const runtime = 'edge';
 
 function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
