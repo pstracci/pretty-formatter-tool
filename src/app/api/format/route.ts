@@ -2,18 +2,21 @@
 
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
-// ✨ CORREÇÃO: Importando o tipo específico para os chunks do stream da OpenAI ✨
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
-// Usando apenas a biblioteca oficial e estável da OpenAI
+// ALTERAÇÃO 1: Cliente configurado para usar a API do OpenRouter
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY, // Sua chave do OpenRouter (do arquivo .env.local)
+  baseURL: process.env.OPENROUTER_BASE_URL, // A URL do OpenRouter (do arquivo .env.local)
+  defaultHeaders: {
+    // Cabeçalhos recomendados pelo OpenRouter
+    "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
+    "X-Title": "AI Formatter", 
+  },
 });
 
 export const runtime = 'edge';
 
-// Função auxiliar para converter o stream da OpenAI em um formato que o navegador entende
-// ✨ CORREÇÃO: Trocando 'any' pelo tipo correto 'ChatCompletionChunk' ✨
 function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
   const encoder = new TextEncoder();
   return new ReadableStream({
@@ -53,7 +56,8 @@ export async function POST(req: NextRequest) {
       : '';
 
     const responseStream = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      // ALTERAÇÃO 2: Nome do modelo atualizado para um modelo gratuito da DeepSeek
+      model: 'deepseek/deepseek-chat-v3.1:free',
       stream: true,
       messages: [
         {
@@ -72,7 +76,7 @@ Your tasks are:
         },
         {
           role: 'user',
-          content: `Please process the following text block:\n\`\`\`\n${cleanedCode}\n\`\`\``
+          content: `Please process the following text block:\n\`\`\`\n${cleanedCode}\n\`\`\` `
         }
       ],
       temperature: 0.1,
@@ -82,7 +86,7 @@ Your tasks are:
     return new Response(stream);
 
   } catch (error) {
-    console.error('Error with OpenAI API:', error);
+    console.error('Error with API:', error); // Mensagem de erro genérica
     return new Response('Error communicating with AI.', { status: 500 });
   }
 }

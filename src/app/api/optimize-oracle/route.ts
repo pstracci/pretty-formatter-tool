@@ -4,8 +4,14 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
+// Cliente configurado para usar a URL e headers do OpenRouter
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENROUTER_BASE_URL,
+  defaultHeaders: {
+    "HTTP-Referer": "https://ai-formatter.com/oracle-optimizer", // Troque pelo seu domínio em produção
+    "X-Title": "Oracle Query Optimizer", 
+  },
 });
 
 export const runtime = 'edge';
@@ -52,7 +58,6 @@ export async function POST(req: NextRequest) {
       ? `**Instrução Especial (Execute Immediate):** O usuário indicou que a query é uma string dentro de um bloco \`EXECUTE IMMEDIATE\`. Você DEVE primeiro analisar e reconstruir o SQL limpo e executável a partir deste formato de string.`
       : '';
     
-    // PROMPT EM PORTUGUÊS, REFINADO E ESTRUTURADO
     const systemPrompt = `Você é um Especialista Sênior em Tuning de Performance de Bancos de Dados Oracle. Sua única tarefa é reescrever uma determinada query SQL para obter o máximo de performance, aplicando estritamente o fluxo de decisão e as regras abaixo.
 
 **DIRETIVAS CRÍTICAS E FORMATO DE SAÍDA:**
@@ -62,7 +67,7 @@ ${executeImmediateHint}
 3.  **Formato de Saída OBRIGATÓRIO:** Sua resposta DEVE ter duas partes, separadas por "---OPTIMIZATION_SUMMARY---".
     -   Parte 1: A query SQL otimizada completa (mas com o mínimo de modificações).
     -   Parte 2: Um resumo em inglês usando Markdown. Este resumo DEVE ser um changelog preciso. Sob o título "**Query Changes**", liste cada modificação específica. Exemplo: \`* Line 5: Inserted /*+ LEADING(a) USE_NL(b) */ after SELECT.\`.
-	-   Parte 3: Outro resumo em inglês usando Markdown. Recomendações cirúrgicas de alterações do tipo DDL que nao conseguimos ajustar com nosso tunning, como criação de novos indices, partições, coleta de estatisticas etc... Porém somente forneça esse tipo de recomendação se elas fizerem realmente sentido.
+    -   Parte 3: Outro resumo em inglês usando Markdown. Recomendações cirúrgicas de alterações do tipo DDL que nao conseguimos ajustar com nosso tunning, como criação de novos indices, partições, coleta de estatisticas etc... Porém somente forneça esse tipo de recomendação se elas fizerem realmente sentido.
 
 ---
 
@@ -127,17 +132,15 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
         ${optionalContext} 
         `;
 
-    // --- SELEÇÃO DINÂMICA DE MODELO ---
     const inputText = systemPrompt + userPrompt;
-    // Estimativa simples de tokens: média de 4 caracteres por token.
     const tokenEstimate = inputText.length / 4;
 
-    // Use o modelo que o usuário especificou.
-    let model = 'gpt-4o'; // Melhor custo-benefício: mais barato e melhor que o gpt-3.5-turbo
-    if (tokenEstimate > 4000) { 
-      model = 'gpt-4o'; // Melhor performance: mais poderoso e mais barato que o gpt-4-turbo
+    // ***** ALTERAÇÃO APLICADA AQUI *****
+    // Lógica de seleção de modelo CORRIGIDA para usar DeepSeek via OpenRouter
+    let model = 'deepseek/deepseek-chat-v3.1:free'; // Modelo rápido e eficiente para tarefas comuns
+    if (tokenEstimate > 10000) { 
+      model = 'openai/gpt-4o'; // Modelo especialista em código para queries complexas
     }
-    // --- FIM DA LÓGICA DINÂMICA ---
 
     const responseStream = await openai.chat.completions.create({
       model: model, 
@@ -146,8 +149,7 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
         { role: 'system', content: systemPrompt, },
         { role: 'user', content: userPrompt, },
       ],
-      temperature: 1,
-
+      temperature: 0.0,
       max_completion_tokens: 8192, 
     });
     
@@ -155,7 +157,7 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
     return new Response(stream);
 
   } catch (error) {
-    console.error('Error with OpenAI API:', error);
+    console.error('Error with API:', error);
     return new Response('Error communicating with AI.', { status: 500 });
   }
 }
