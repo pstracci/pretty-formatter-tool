@@ -2,13 +2,13 @@
 
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
+import type { ChatCompletionChunk, ChatCompletionCreateParamsStreaming } from 'openai/resources/chat';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: process.env.OPENROUTER_BASE_URL,
   defaultHeaders: {
-      "HTTP-Referer": "https://ai-formatter.com/oracle-optimizer", // Troque pelo seu domínio em produção
+       "HTTP-Referer": "https://ai-formatter.com/oracle-optimizer", // Troque pelo seu domínio em produção
     "X-Title": "Oracle Query Optimizer", 
   },
 });
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       return new Response('Query is required.', { status: 400 });
     }
 
-        let tableMetadata = 'Nenhum metadado de tabela foi fornecido.';
+    let tableMetadata = 'Nenhum metadado de tabela foi fornecido.';
     if (typeof tables === 'string' && tables.trim() !== '') {
       tableMetadata = `O usuário forneceu o seguinte output de metadados do seu banco de dados. Use isso como a principal fonte da verdade para tamanhos, índices e estrutura das tabelas:\n\n${tables}`;
     } else if (Array.isArray(tables) && tables.length > 0) {
@@ -103,7 +103,7 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
 - **Contexto Opcional:** Use o Plano de Execução e o Tempo de Execução atuais como referências, mas sem sobrescrever as regras principais.
 `;
     
-  let optionalContext = '';
+    let optionalContext = '';
     if (executionPlan) {
         optionalContext += `\n\n**Plano de Execução Atual (XML):**\n\`\`\`xml\n${executionPlan}\n\`\`\``;
     }
@@ -122,6 +122,7 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
         \`\`\`
         ${optionalContext} 
         `;
+
     const primaryModel = process.env.OPTIMIZER_MODEL_PRIMARY;
     const fallbackModel = process.env.OPTIMIZER_MODEL_FALLBACK;
 
@@ -133,12 +134,13 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
     const tokenEstimate = (systemPrompt + userPrompt).length / 4;
     console.log(`[Oracle Optimizer] Request received. Approx. tokens: ${Math.round(tokenEstimate)}`);
 
-    const completionParams = {
-        stream: true,
+    const completionParams: ChatCompletionCreateParamsStreaming = {
         messages: [
-            { role: 'system', content: systemPrompt } as const,
-            { role: 'user', content: userPrompt } as const,
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
         ],
+        model: primaryModel, // O modelo será substituído dinamicamente abaixo
+        stream: true,
         temperature: 0.0,
         max_completion_tokens: 8192,
     };
@@ -149,7 +151,6 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
             ...completionParams,
             model: primaryModel,
         });
-        // Retorna a resposta diretamente se o primário funcionar
         return new Response(OpenAIStream(responseStream));
     } catch (error) {
         console.warn(`[Oracle Optimizer] Primary model (${primaryModel}) failed. Retrying with fallback: ${fallbackModel}. Error:`, error);
@@ -161,7 +162,6 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
             ...completionParams,
             model: fallbackModel,
         });
-        // Retorna a resposta do fallback se ele funcionar
         return new Response(OpenAIStream(fallbackStream));
     }
 

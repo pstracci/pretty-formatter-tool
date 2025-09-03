@@ -2,13 +2,14 @@
 
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
+import type { ChatCompletionChunk, ChatCompletionCreateParamsStreaming } from 'openai/resources/chat';
 
+// Cliente configurado para usar a API do OpenRouter
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: process.env.OPENROUTER_BASE_URL,
   defaultHeaders: {
-      "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
+     "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
     "X-Title": "AI Formatter", 
   },
 });
@@ -62,7 +63,7 @@ Your tasks are:
 6. ${optimizationHint}
 7. DO NOT add any explanation, introduction, or text before or after the result. Your response must be ONLY the finalized content.
 8. If the input text is complete gibberish, return the exact string: "UNFORMATTABLE_TEXT".`;
-
+    
     const userContent = `Please process the following text block:\n\`\`\`\n${cleanedCode}\n\`\`\``;
 
     const primaryModel = process.env.FORMATTER_MODEL_PRIMARY;
@@ -76,12 +77,13 @@ Your tasks are:
     const tokenEstimate = (systemContent + userContent).length / 4;
     console.log(`[Formatter] Request received. Approx. tokens: ${Math.round(tokenEstimate)}`);
 
-    const completionParams = {
-        stream: true,
+    const completionParams: ChatCompletionCreateParamsStreaming = {
         messages: [
-            { role: 'system', content: systemContent } as const,
-            { role: 'user', content: userContent } as const
+            { role: 'system', content: systemContent },
+            { role: 'user', content: userContent }
         ],
+        model: primaryModel, // O modelo será substituído dinamicamente abaixo
+        stream: true,
         temperature: 0.1,
         max_completion_tokens: 8192, 
     };
@@ -92,19 +94,17 @@ Your tasks are:
             ...completionParams,
             model: primaryModel,
         });
-        // Retorna a resposta diretamente se o primário funcionar
         return new Response(OpenAIStream(responseStream));
     } catch (error) {
         console.warn(`[Formatter] Primary model (${primaryModel}) failed. Retrying with fallback: ${fallbackModel}. Error:`, error);
         
-        if (!fallbackModel) throw error; // Se não houver fallback, o erro vai para o catch final
+        if (!fallbackModel) throw error;
 
         console.log(`[Formatter] Attempting with fallback model: ${fallbackModel}`);
         const fallbackStream = await openai.chat.completions.create({
             ...completionParams,
             model: fallbackModel,
         });
-        // Retorna a resposta do fallback se ele funcionar
         return new Response(OpenAIStream(fallbackStream));
     }
 
