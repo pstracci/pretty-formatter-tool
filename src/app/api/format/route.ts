@@ -9,13 +9,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: process.env.OPENROUTER_BASE_URL,
   defaultHeaders: {
-    "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
+      "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
     "X-Title": "AI Formatter", 
   },
 });
-
-
-//export const runtime = 'edge';
 
 function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
   const encoder = new TextEncoder();
@@ -69,9 +66,14 @@ Your tasks are:
     
     const userContent = `Please process the following text block:\n\`\`\`\n${cleanedCode}\n\`\`\``;
 
-    // LÓGICA DE SELEÇÃO DE MODELO E FALLBACK
-    const primaryModel = process.env.FORMATTER_MODEL_PRIMARY || 'deepseek/chat';
-    const fallbackModel = process.env.FORMATTER_MODEL_FALLBACK || 'openai/gpt-4o-mini';
+    // LÓGICA DE SELEÇÃO DE MODELO E FALLBACK (LENDO APENAS DE ENV VARS)
+    const primaryModel = process.env.FORMATTER_MODEL_PRIMARY;
+    const fallbackModel = process.env.FORMATTER_MODEL_FALLBACK;
+
+    if (!primaryModel) {
+        console.error("[Formatter] CRITICAL: FORMATTER_MODEL_PRIMARY environment variable is not set.");
+        return new Response('Server is not configured correctly.', { status: 500 });
+    }
     
     const tokenEstimate = (systemContent + userContent).length / 4;
     console.log(`[Formatter] Request received. Approx. tokens: ${Math.round(tokenEstimate)}`);
@@ -80,15 +82,15 @@ Your tasks are:
     const completionParams = {
         stream: true,
         messages: [
-            { role: 'system', content: systemContent },
-            { role: 'user', content: userContent }
+            // CORREÇÃO DE TIPO APLICADA AQUI
+            { role: 'system', content: systemContent } as const,
+            { role: 'user', content: userContent } as const
         ],
         temperature: 0.1,
-		max_completion_tokens: 8192, 
+        max_completion_tokens: 8192, 
     };
 
     try {
-        // Tentativa 1: Usar o modelo primário
         console.log(`[Formatter] Attempting with primary model: ${primaryModel}`);
         responseStream = await openai.chat.completions.create({
             ...completionParams,
@@ -97,9 +99,8 @@ Your tasks are:
     } catch (error) {
         console.warn(`[Formatter] Primary model (${primaryModel}) failed. Retrying with fallback: ${fallbackModel}. Error:`, error);
         
-        if (!fallbackModel) throw error; // Se não houver fallback, relança o erro original
+        if (!fallbackModel) throw error;
 
-        // Tentativa 2: Usar o modelo de fallback
         console.log(`[Formatter] Attempting with fallback model: ${fallbackModel}`);
         responseStream = await openai.chat.completions.create({
             ...completionParams,

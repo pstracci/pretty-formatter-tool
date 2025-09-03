@@ -14,8 +14,6 @@ const openai = new OpenAI({
   },
 });
 
-//export const runtime = 'edge';
-
 function OpenAIStream(stream: AsyncIterable<ChatCompletionChunk>) {
   const encoder = new TextEncoder();
   return new ReadableStream({
@@ -49,14 +47,9 @@ export async function POST(req: NextRequest) {
       ).join('\n');
     }
 
-    const parallelHint = parallel.allowed
-      ? `A execução paralela é permitida com um grau de até ${parallel.degree}.`
-      : 'A execução paralela não é permitida.';
+    const parallelHint = parallel.allowed ? `A execução paralela é permitida com um grau de até ${parallel.degree}.` : 'A execução paralela não é permitida.';
+    const executeImmediateHint = isExecuteImmediate ? `**Instrução Especial (Execute Immediate):** O usuário indicou que a query é uma string dentro de um bloco \`EXECUTE IMMEDIATE\`. Você DEVE primeiro analisar e reconstruir o SQL limpo e executável a partir deste formato de string.` : '';
     
-    const executeImmediateHint = isExecuteImmediate
-      ? `**Instrução Especial (Execute Immediate):** O usuário indicou que a query é uma string dentro de um bloco \`EXECUTE IMMEDIATE\`. Você DEVE primeiro analisar e reconstruir o SQL limpo e executável a partir deste formato de string.`
-      : '';
-
     const systemPrompt = `Você é um Especialista Sênior em Tuning de Performance de Bancos de Dados Oracle. Sua única tarefa é reescrever uma determinada query SQL para obter o máximo de performance, aplicando estritamente o fluxo de decisão e as regras abaixo.
 
 **DIRETIVAS CRÍTICAS E FORMATO DE SAÍDA:**
@@ -131,9 +124,14 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
         ${optionalContext} 
         `;
 
-    // LÓGICA DE SELEÇÃO DE MODELO E FALLBACK
-    const primaryModel = process.env.OPTIMIZER_MODEL_PRIMARY  
-    const fallbackModel = process.env.OPTIMIZER_MODEL_FALLBACK  
+    // LÓGICA DE SELEÇÃO DE MODELO E FALLBACK (LENDO APENAS DE ENV VARS)
+    const primaryModel = process.env.OPTIMIZER_MODEL_PRIMARY;
+    const fallbackModel = process.env.OPTIMIZER_MODEL_FALLBACK;
+
+    if (!primaryModel) {
+        console.error("[Oracle Optimizer] CRITICAL: OPTIMIZER_MODEL_PRIMARY environment variable is not set.");
+        return new Response('Server is not configured correctly.', { status: 500 });
+    }
     
     const tokenEstimate = (systemPrompt + userPrompt).length / 4;
     console.log(`[Oracle Optimizer] Request received. Approx. tokens: ${Math.round(tokenEstimate)}`);
@@ -142,15 +140,15 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
     const completionParams = {
         stream: true,
         messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
+            // CORREÇÃO DE TIPO APLICADA AQUI
+            { role: 'system', content: systemPrompt } as const,
+            { role: 'user', content: userPrompt } as const,
         ],
         temperature: 0.0,
         max_completion_tokens: 8192,
     };
 
     try {
-        // Tentativa 1: Usar o modelo primário
         console.log(`[Oracle Optimizer] Attempting with primary model: ${primaryModel}`);
         responseStream = await openai.chat.completions.create({
             ...completionParams,
@@ -159,9 +157,8 @@ Avalie o tamanho das tabelas nos metadados e escolha UMA das seguintes estratég
     } catch (error) {
         console.warn(`[Oracle Optimizer] Primary model (${primaryModel}) failed. Retrying with fallback: ${fallbackModel}. Error:`, error);
         
-        if (!fallbackModel) throw error; // Se não houver fallback, relança o erro original
+        if (!fallbackModel) throw error;
 
-        // Tentativa 2: Usar o modelo de fallback
         console.log(`[Oracle Optimizer] Attempting with fallback model: ${fallbackModel}`);
         responseStream = await openai.chat.completions.create({
             ...completionParams,
