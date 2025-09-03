@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "nixpacksConfig": {
+      "environmentVariables": {
+        "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
+        "OPENROUTER_BASE_URL": "${{ secrets.OPENROUTER_BASE_URL }}",
+        "FORMATTER_MODEL_PRIMARY": "${{ secrets.FORMATTER_MODEL_PRIMARY }}",
+        "FORMATTER_MODEL_FALLBACK": "${{ secrets.FORMATTER_MODEL_FALLBACK }}",
+        "OPTIMIZER_MODEL_PRIMARY": "${{ secrets.OPTIMIZER_MODEL_PRIMARY }}",
+        "OPTIMIZER_MODEL_FALLBACK": "${{ secrets.OPTIMIZER_MODEL_FALLBACK }}"
+      }
+    }
+  },
+  "deploy": {
+    "startCommand": "npm run start"
+  }
+}
