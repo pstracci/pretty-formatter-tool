@@ -4,12 +4,11 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import type { ChatCompletionChunk, ChatCompletionCreateParamsStreaming } from 'openai/resources/chat';
 
-// Cliente configurado para usar a API do OpenRouter
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const openRouterClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, // Sua chave do OpenRouter
   baseURL: process.env.OPENROUTER_BASE_URL,
   defaultHeaders: {
-     "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
+    "HTTP-Referer": "https://ai-formatter.com/", // Troque pelo seu domínio em produção
     "X-Title": "AI Formatter", 
   },
 });
@@ -52,7 +51,7 @@ export async function POST(req: NextRequest) {
       ? `The user has provided a hint that the content is '${language}'. Pay special attention to formatting it according to the best practices for this format.`
       : '';
     
-    const systemContent = `You are an expert code formatter and content preserver. Your only function is to receive text and return it formatted.
+   const systemContent = `You are an expert code formatter and content preserver. Your only function is to receive text and return it formatted.
 Your MOST IMPORTANT rule is: DO NOT omit, remove, or delete ANY part of the original text. ALL input content must be present in the output.
 Your tasks are:
 1. Analyze the entire text.
@@ -63,11 +62,13 @@ Your tasks are:
 6. ${optimizationHint}
 7. DO NOT add any explanation, introduction, or text before or after the result. Your response must be ONLY the finalized content.
 8. If the input text is complete gibberish, return the exact string: "UNFORMATTABLE_TEXT".`;
-    
+
     const userContent = `Please process the following text block:\n\`\`\`\n${cleanedCode}\n\`\`\``;
 
     const primaryModel = process.env.FORMATTER_MODEL_PRIMARY;
     const fallbackModel = process.env.FORMATTER_MODEL_FALLBACK;
+    const finalFallbackKey = process.env.OPENAI_KEY_FALLBACK;
+    const finalFallbackModel = 'gpt-4o-mini'; // Modelo hardcoded da OpenAI
 
     if (!primaryModel) {
         console.error("[Formatter] CRITICAL: FORMATTER_MODEL_PRIMARY environment variable is not set.");
@@ -82,34 +83,58 @@ Your tasks are:
             { role: 'system', content: systemContent },
             { role: 'user', content: userContent }
         ],
-        model: primaryModel, // O modelo será substituído dinamicamente abaixo
+        model: primaryModel,
         stream: true,
         temperature: 0.1,
         max_completion_tokens: 8192, 
     };
 
     try {
-        console.log(`[Formatter] Attempting with primary model: ${primaryModel}`);
-        const responseStream = await openai.chat.completions.create({
+        // Tentativa 1: Modelo Primário via OpenRouter
+        console.log(`[Formatter] Attempting with primary model (OpenRouter): ${primaryModel}`);
+        const responseStream = await openRouterClient.chat.completions.create({
             ...completionParams,
             model: primaryModel,
         });
         return new Response(OpenAIStream(responseStream));
-    } catch (error) {
-        console.warn(`[Formatter] Primary model (${primaryModel}) failed. Retrying with fallback: ${fallbackModel}. Error:`, error);
+    } catch (error1) {
+        console.warn(`[Formatter] Primary model (${primaryModel}) failed. Error:`, error1);
         
-        if (!fallbackModel) throw error;
+        // Tentativa 2: Modelo de Fallback via OpenRouter
+        if (fallbackModel) {
+            try {
+                console.log(`[Formatter] Retrying with fallback model (OpenRouter): ${fallbackModel}`);
+                const fallbackStream = await openRouterClient.chat.completions.create({
+                    ...completionParams,
+                    model: fallbackModel,
+                });
+                return new Response(OpenAIStream(fallbackStream));
+            } catch (error2) {
+                console.warn(`[Formatter] Fallback model (${fallbackModel}) also failed. Error:`, error2);
+            }
+        }
 
-        console.log(`[Formatter] Attempting with fallback model: ${fallbackModel}`);
-        const fallbackStream = await openai.chat.completions.create({
-            ...completionParams,
-            model: fallbackModel,
-        });
-        return new Response(OpenAIStream(fallbackStream));
+        // Tentativa 3: Fallback final com a API da OpenAI
+        if (finalFallbackKey) {
+            try {
+                console.log(`[Formatter] All OpenRouter models failed. Retrying with final fallback (OpenAI API): ${finalFallbackModel}`);
+                const openAIClient = new OpenAI({ apiKey: finalFallbackKey });
+                const finalFallbackStream = await openAIClient.chat.completions.create({
+                    ...completionParams,
+                    model: finalFallbackModel,
+                });
+                return new Response(OpenAIStream(finalFallbackStream));
+            } catch (error3) {
+                 console.error(`[Formatter] Final fallback with OpenAI API also failed. Error:`, error3);
+            }
+        }
     }
 
+    // Se todas as tentativas falharem, joga o erro para o catch principal
+    throw new Error("All model attempts failed.");
+
   } catch (error) {
-    console.error(`[Formatter] Falha ao formatar com ambos os modelos. Erro final:`, error);
+    console.error(`[Formatter] Falha ao formatar com todos os modelos. Erro final:`, error);
     return new Response('Error communicating with AI.', { status: 500 });
   }
 }
