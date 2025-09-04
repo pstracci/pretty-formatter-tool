@@ -134,7 +134,7 @@ export default function ExecutionPlanExplainerPage() {
             <div className="flex items-center gap-2 mb-4">
                 <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 p-3 rounded-lg transition-colors cursor-pointer">
                     <Upload size={18} />
-                    {fileName ? `File: ${fileName}` : &quot;Select XML File...&quot;}
+                    {fileName ? `File: ${fileName}` : "Select XML File..."}
                 </button>
                 <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xml,text/xml" />
                 {fileName && (
