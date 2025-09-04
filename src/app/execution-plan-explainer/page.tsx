@@ -128,7 +128,7 @@ export default function ExecutionPlanExplainerPage() {
           <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 flex flex-col">
             <h2 className="text-2xl font-semibold mb-4 text-cyan-400">1. Upload Your Execution Plan</h2>
             <p className="text-sm text-gray-400 mb-4">
-              Export your query's execution plan from your favorite SQL client as an XML file and upload it here. The AI will analyze the structure and provide a step-by-step breakdown.
+              Export your query&apos;s execution plan from your favorite SQL client as an XML file and upload it here. The AI will analyze the structure and provide a step-by-step breakdown.
             </p>
 
             <div className="flex items-center gap-2 mb-4">
