@@ -1,9 +1,11 @@
+// src/app/page.tsx
+
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { githubDark } from '@uiw/codemirror-theme-github';
-import { FileCode, Upload, Download, Copy, Check, Loader, AlertTriangle, Coffee, Info, X, Square, Eraser } from 'lucide-react';
+import { FileCode, Upload, Download, Copy, Check, Loader, AlertTriangle, Coffee, Info, X, Square, Eraser, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 const LINE_LIMIT = 1000;
@@ -22,7 +24,6 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
           <section>
             <h3 className="text-lg font-semibold text-gray-100 mb-2">How to Use</h3>
             <ul className="list-disc list-inside space-y-2 text-sm">
-                {/* CORREÇÃO: Usamos &quot; para as aspas */}
               <li>Paste your code directly into the &quot;Input Code&quot; panel.</li>
               <li>Alternatively, click &quot;Select File&quot; to upload a code file from your computer.</li>
               <li>The code will be formatted automatically in the &quot;Formatted Output&quot; panel after a short delay.</li>
@@ -51,7 +52,7 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
                     <ul className="list-disc list-inside mt-1">
                         <li>Fixed race condition bug with the Stop button.</li>
                         <li>Added a &quot;Clean&quot; button to the input panel.</li>
-						<li>Added the &quot;Upload execution plan file&quot; funcionality  .</li>
+						<li>Added the &quot;Upload execution plan file&quot; funcionality.</li>
                     </ul>
                 </div>
                 <div>
@@ -67,7 +68,6 @@ const AboutModal = ({ onClose }: { onClose: () => void }) => (
       </div>
     </div>
 );
-
 
 export default function HomePage() {
   const [inputCode, setInputCode] = useState<string>(PLACEHOLDER_TEXT);
@@ -85,7 +85,7 @@ export default function HomePage() {
   
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const formatCode = useCallback(async (codeToFormat: string, language: string) => {
+ const formatCode = useCallback(async (codeToFormat: string, language: string) => {
     const lines = codeToFormat.split('\n').length;
     if (isPristine || !codeToFormat || codeToFormat.trim() === '' || lines > LINE_LIMIT) {
       if (lines > LINE_LIMIT) setLineCountError(`Line limit of ${LINE_LIMIT} exceeded. Formatting paused.`);
@@ -166,15 +166,13 @@ export default function HomePage() {
   const handleFocus = () => { if (isPristine) { setInputCode(''); setIsPristine(false); } };
   const handleCopy = () => { if (!formattedCode) return; navigator.clipboard.writeText(formattedCode); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); };
   const handleDownload = () => { if (!formattedCode) return; const blob = new Blob([formattedCode], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = outputFileName; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); };
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) { setIsPristine(false); const reader = new FileReader(); reader.onload = (e) => { const text = e.target?.result as string; setInputCode(text); }; reader.readAsText(file); setOutputFileName(`formatted-${file.name}`); } };
-  
-  const handleStopStreaming = () => {
+   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) { setIsPristine(false); const reader = new FileReader(); reader.onload = (e) => { const text = e.target?.result as string; setInputCode(text); }; reader.readAsText(file); setOutputFileName(`formatted-${file.name}`); } };
+    const handleStopStreaming = () => {
     if (abortControllerRef.current) {
         abortControllerRef.current.abort();
     }
   };
-
-  const handleClean = () => {
+    const handleClean = () => {
     if (abortControllerRef.current) {
         abortControllerRef.current.abort();
     }
@@ -188,7 +186,6 @@ export default function HomePage() {
     }
   };
 
-
   return (
     <div className="h-screen font-sans bg-gradient-to-br from-gray-900 to-slate-800 text-white flex flex-col">
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
@@ -198,10 +195,16 @@ export default function HomePage() {
               <h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2"><FileCode /> AI Formatter</h1>
               <p className="text-sm text-gray-400 mt-1">AI-Powered Code Formatting</p>
               
-              <div className="space-y-2 pt-6 my-4 border-t border-gray-700">
+                     <div className="space-y-2 pt-6 my-4 border-t border-gray-700">
                   <h3 className="text-sm font-semibold text-gray-300">Try Other Tools</h3>
                   <Link href="/oracle-optimizer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
                     - Oracle Query Optimizer
+                  </Link>
+                  <Link href="/execution-plan-explainer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
+                    <div className="flex items-center gap-2">
+                        <span>- Execution Plan Explainer</span>
+                        <span className="text-xs bg-yellow-500 text-gray-900 font-bold px-1.5 py-0.5 rounded-md">New</span>
+                    </div>
                   </Link>
               </div>
 
