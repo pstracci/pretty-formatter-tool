@@ -5,6 +5,7 @@ import { useState, useRef, useCallback } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { xml } from '@codemirror/lang-xml';
 import { githubDark } from '@uiw/codemirror-theme-github';
+import { placeholder } from '@codemirror/view';
 import { Upload, Loader, AlertTriangle, Wand2, FileText, Eraser, Square } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -22,8 +23,12 @@ export default function ExecutionPlanExplainerPage() {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type !== 'text/xml' && !file.name.toLowerCase().endsWith('.xml')) {
-        setError('Invalid file type. Please upload an XML file.');
+      // ===== ACEITA MÚLTIPLAS EXTENSÕES, MAS O CONTEÚDO SERÁ VALIDADO NO BACKEND =====
+      const allowedExtensions = ['.xml', '.html', '.csv', '.txt'];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      
+      if (!allowedExtensions.includes(fileExtension)) {
+        setError('Invalid file type. Please upload a supported file (XML, HTML, CSV, TXT).');
         setPlanXml('');
         setFileName('');
         return;
@@ -61,7 +66,7 @@ export default function ExecutionPlanExplainerPage() {
 
   const handleGenerateExplanation = useCallback(async () => {
     if (!planXml) {
-      setError('Please upload an execution plan file first.');
+      setError('Please upload or paste an execution plan first.');
       return;
     }
 
@@ -81,7 +86,9 @@ export default function ExecutionPlanExplainerPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.statusText}`);
+        // Pega a mensagem de erro customizada do backend, se houver
+        const errorText = await response.text();
+        throw new Error(errorText || `Server error: ${response.statusText}`);
       }
       if (!response.body) {
         throw new Error('Response body is empty.');
@@ -126,18 +133,18 @@ export default function ExecutionPlanExplainerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* PAINEL DE ENTRADA */}
           <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 flex flex-col">
-            <h2 className="text-2xl font-semibold mb-4 text-cyan-400">1. Upload Your Execution Plan</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-cyan-400">1. Provide Your Execution Plan</h2>
             <p className="text-sm text-gray-400 mb-4">
-              Export your query&apos;s execution plan from your favorite SQL client as an XML file and upload it here. The AI will analyze the structure and provide a step-by-step breakdown.
+              Upload your execution plan file (XML, TXT, etc.) or paste the content directly into the editor below.
             </p>
 
             <div className="flex items-center gap-2 mb-4">
                 <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 p-3 rounded-lg transition-colors cursor-pointer">
                     <Upload size={18} />
-                    {fileName ? `File: ${fileName}` : "Select XML File..."}
+                    {fileName ? `File: ${fileName}` : "Select File..."}
                 </button>
-                <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xml,text/xml" />
-                {fileName && (
+                <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".xml,.html,.csv,.txt,text/xml,text/plain" />
+                {(fileName || planXml) && (
                     <button onClick={handleClean} className="p-3 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors" title="Clear content">
                         <Eraser size={18} />
                     </button>
@@ -145,7 +152,18 @@ export default function ExecutionPlanExplainerPage() {
             </div>
 
             <div className="border border-gray-600 rounded-lg overflow-hidden flex-grow mt-2">
-              <CodeMirror value={planXml} height="400px" theme={githubDark} extensions={[xml()]} readOnly={true} style={{ fontSize: '14px' }}/>
+              <CodeMirror 
+                value={planXml} 
+                height="400px" 
+                theme={githubDark} 
+                extensions={[
+                  xml(), 
+                  placeholder('Paste your Oracle Execution Plan XML here...')
+                ]} 
+                onChange={(value) => setPlanXml(value)}
+                readOnly={false}
+                style={{ fontSize: '14px' }}
+              />
             </div>
             
             <button onClick={handleGenerateExplanation} disabled={isLoading || !planXml} className="w-full mt-6 flex items-center justify-center gap-3 text-lg font-bold bg-cyan-600 hover:bg-cyan-700 p-3 rounded-lg transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed">
@@ -158,7 +176,6 @@ export default function ExecutionPlanExplainerPage() {
           <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 flex flex-col">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-semibold text-cyan-400">2. AI-Powered Explanation</h2>
-                {/* ===== BOTÃO STOP ADICIONADO AQUI ===== */}
                 {isLoading && (
                     <div className='flex items-center gap-2'>
                         <Loader className="animate-spin text-cyan-400" size={18} />
@@ -169,7 +186,6 @@ export default function ExecutionPlanExplainerPage() {
                 )}
             </div>
             
-            {/* ===== PAINEL DE SAÍDA COM ALTURA FIXA E SCROLL ===== */}
             <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 flex-grow h-[500px] overflow-y-auto prose prose-invert prose-sm max-w-none prose-headings:text-emerald-400 prose-strong:text-white">
                 {error && (<div className='flex flex-col items-center justify-center text-center h-full'><AlertTriangle className="text-red-400 mb-4" size={48} /><p className='text-red-400 font-semibold'>{error}</p></div>)}
                 {!error && !explanation && !isLoading && <p className="text-gray-400">The explanation will appear here once you generate it.</p>}
