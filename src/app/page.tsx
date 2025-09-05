@@ -26,61 +26,62 @@ const LINE_LIMIT = 1000;
 const PLACEHOLDER_TEXT = '// Paste your code, or select a file to format...';
 
 const AboutModal = ({ onClose }: { onClose: () => void }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-    <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full text-gray-300 border border-gray-700 max-h-[90vh] overflow-y-auto">
-      <div className="flex justify-between items-center p-4 border-b border-gray-700 sticky top-0 bg-gray-800">
-        <h2 className="text-xl font-bold text-emerald-400">About AI Formatter & Updates</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-white">
-          <X size={24} />
-        </button>
-      </div>
-      <div className="p-6 space-y-6">
-        <section>
-          <h3 className="text-lg font-semibold text-gray-100 mb-2">How to Use</h3>
-          <ul className="list-disc list-inside space-y-2 text-sm">
-            <li>Paste your code directly into the &quot;Input Code&quot; panel.</li>
-            <li>Alternatively, click &quot;Select File&quot; to upload a code file from your computer.</li>
-            <li>The code will be formatted automatically in the &quot;Formatted Output&quot; panel after a short delay.</li>
-            <li>Use the &quot;Optimize for...&quot; dropdown menu to give the AI a hint about the code&apos;s language for better results.</li>
-            <li>Copy or download your formatted code using the buttons at the top right of the output panel.</li>
-          </ul>
-        </section>
-        <section>
-          <h3 className="text-lg font-semibold text-gray-100 mb-2">About the Author</h3>
-          <p className="text-sm">
-            This tool was created by Paulo Stracci. You can reach me via the links below.
-          </p>
-          <div className="flex flex-wrap gap-4 mt-3 text-sm">
-            <a href="mailto:paulo.stracci@gmail.com" className="text-emerald-400 hover:text-emerald-300">Email</a>
-            <a href="mailto:paulo_stracci@hotmail.com" className="text-emerald-400 hover:text-emerald-300">LinkedIn (paulo_stracci@hotmail.com)</a>
-          </div>
-          <p className="text-sm mt-4">
-            Check out my other project, a language learning platform: <a href="https://www.verbi.com.br" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 font-semibold">Verbi</a>.
-          </p>
-        </section>
-        <section>
-          <h3 className="text-lg font-semibold text-gray-100 mb-2">Changelog</h3>
-          <div className="space-y-3 text-sm">
-            <div>
-              <p className="font-semibold text-gray-200">September 2025</p>
-              <ul className="list-disc list-inside mt-1">
-                <li>Fixed race condition bug with the Stop button.</li>
-                <li>Added a &quot;Clean&quot; button to the input panel.</li>
-                <li>Added the &quot;Upload execution plan file&quot; funcionality.</li>
-              </ul>
+    // ... (O conteúdo do modal permanece o mesmo, sem alterações)
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full text-gray-300 border border-gray-700 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-4 border-b border-gray-700 sticky top-0 bg-gray-800">
+            <h2 className="text-xl font-bold text-emerald-400">About AI Formatter & Updates</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X size={24} />
+            </button>
+        </div>
+        <div className="p-6 space-y-6">
+            <section>
+            <h3 className="text-lg font-semibold text-gray-100 mb-2">How to Use</h3>
+            <ul className="list-disc list-inside space-y-2 text-sm">
+                <li>Paste your code directly into the &quot;Input Code&quot; panel.</li>
+                <li>Alternatively, click &quot;Select File&quot; to upload a code file from your computer.</li>
+                <li>The code will be formatted automatically in the &quot;Formatted Output&quot; panel after a short delay.</li>
+                <li>Use the &quot;Optimize for...&quot; dropdown menu to give the AI a hint about the code&apos;s language for better results.</li>
+                <li>Copy or download your formatted code using the buttons at the top right of the output panel.</li>
+            </ul>
+            </section>
+            <section>
+            <h3 className="text-lg font-semibold text-gray-100 mb-2">About the Author</h3>
+            <p className="text-sm">
+                This tool was created by Paulo Stracci. You can reach me via the links below.
+            </p>
+            <div className="flex flex-wrap gap-4 mt-3 text-sm">
+                <a href="mailto:paulo.stracci@gmail.com" className="text-emerald-400 hover:text-emerald-300">Email</a>
+                <a href="mailto:paulo_stracci@hotmail.com" className="text-emerald-400 hover:text-emerald-300">LinkedIn (paulo_stracci@hotmail.com)</a>
             </div>
-            <div>
-              <p className="font-semibold text-gray-200">August 2025</p>
-              <ul className="list-disc list-inside mt-1">
-                <li>Initial launch of AI Formatter!</li>
-                <li>Features live streaming formatting and support for multiple languages.</li>
-              </ul>
+            <p className="text-sm mt-4">
+                Check out my other project, a language learning platform: <a href="https://www.verbi.com.br" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 font-semibold">Verbi</a>.
+            </p>
+            </section>
+            <section>
+            <h3 className="text-lg font-semibold text-gray-100 mb-2">Changelog</h3>
+            <div className="space-y-3 text-sm">
+                <div>
+                <p className="font-semibold text-gray-200">September 2025</p>
+                <ul className="list-disc list-inside mt-1">
+                    <li>Fixed race condition bug with the Stop button.</li>
+                    <li>Added a &quot;Clean&quot; button to the input panel.</li>
+                    <li>Added the &quot;Upload execution plan file&quot; funcionality.</li>
+                </ul>
+                </div>
+                <div>
+                <p className="font-semibold text-gray-200">August 2025</p>
+                <ul className="list-disc list-inside mt-1">
+                    <li>Initial launch of AI Formatter!</li>
+                    <li>Features live streaming formatting and support for multiple languages.</li>
+                </ul>
+                </div>
             </div>
-          </div>
-        </section>
-      </div>
+            </section>
+        </div>
+        </div>
     </div>
-  </div>
 );
 
 export default function HomePage() {
@@ -99,6 +100,7 @@ export default function HomePage() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // ... (Todas as funções handle... e useEffect... permanecem as mesmas, sem alterações)
   const formatCode = useCallback(async (codeToFormat: string, language: string) => {
     const lines = codeToFormat.split('\n').length;
     if (isPristine || !codeToFormat || codeToFormat.trim() === '' || lines > LINE_LIMIT) {
@@ -233,39 +235,22 @@ export default function HomePage() {
     }
   };
 
+
   return (
     <div className="h-screen font-sans bg-gradient-to-br from-gray-900 to-slate-800 text-white flex flex-col">
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
       <div className="flex flex-1 overflow-hidden">
+        {/* A ESTRUTURA DO ASIDE VOLTOU PARA 2 SEÇÕES (TOPO E RODAPÉ) */}
         <aside className="w-72 bg-gray-900/50 p-6 flex flex-col justify-between border-r border-gray-700">
+          
+          {/* SEÇÃO 1: TOPO (AGORA INCLUI AS FERRAMENTAS) */}
           <div>
             <h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2">
               <FileCode /> AI Formatter
             </h1>
             <p className="text-sm text-gray-400 mt-1">AI-Powered Code Formatting</p>
 
-            <div className="space-y-2 pt-6 my-4 border-t border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-300">Try Other Tools</h3>
-
-              <Link href="/oracle-optimizer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
-                - Oracle Query Optimizer
-              </Link>
-              <Link href="/execution-plan-explainer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
-                <div className="flex items-center gap-2">
-                  <span>- Execution Plan Explainer</span>
-                  <span className="text-xs bg-yellow-500 text-gray-900 font-bold px-1.5 py-0.5 rounded-md">New</span>
-                </div>
-              </Link>
-			  
-			  <Link href="/oracle-query-cleaner" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
-                <div className="flex items-center gap-2">
-                  <span>- Oracle Query Cleaner</span>
-                  <span className="text-xs bg-yellow-500 text-gray-900 font-bold px-1.5 py-0.5 rounded-md">New</span>
-                </div>
-              </Link>
-            </div>
-
-            <div className="mt-4 space-y-6">
+            <div className="mt-8 space-y-6 border-t border-gray-700 pt-6">
               <div className="space-y-2">
                 <label htmlFor="language" className="text-sm font-semibold text-gray-300">Optimize for...</label>
                 <select
@@ -299,7 +284,29 @@ export default function HomePage() {
                 />
               </div>
             </div>
+            
+            {/* A SEÇÃO DE FERRAMENTAS FOI MOVIDA PARA CÁ */}
+            <div className="mt-6 space-y-2 py-4 border-y border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-300">Try Other Tools</h3>
+                <Link href="/oracle-optimizer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
+                - Oracle Query Optimizer
+                </Link>
+                <Link href="/execution-plan-explainer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
+                <div className="flex items-center gap-2">
+                    <span>- Execution Plan Explainer</span>
+                    <span className="text-xs bg-yellow-500 text-gray-900 font-bold px-1.5 py-0.5 rounded-md">New</span>
+                </div>
+                </Link>
+                <Link href="/oracle-query-cleaner" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
+                <div className="flex items-center gap-2">
+                    <span>- Oracle Query Cleaner</span>
+                    <span className="text-xs bg-yellow-500 text-gray-900 font-bold px-1.5 py-0.5 rounded-md">New</span>
+                </div>
+                </Link>
+            </div>
           </div>
+
+          {/* SEÇÃO 2: RODAPÉ */}
           <div className="space-y-4 pt-6 border-t border-gray-700">
             <button
               onClick={() => setIsAboutModalOpen(true)}
@@ -320,6 +327,8 @@ export default function HomePage() {
             </div>
           </div>
         </aside>
+
+        {/* O restante da página (main, CodeMirror, etc.) permanece o mesmo */}
         <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
           <div className="flex flex-col rounded-lg overflow-hidden border border-gray-700">
             <div className="bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-300 flex justify-between items-center">
