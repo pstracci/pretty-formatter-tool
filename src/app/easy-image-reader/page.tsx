@@ -5,7 +5,7 @@ import { Download, HardDrive, Cpu, GitMerge } from 'lucide-react';
 import Link from 'next/link';
 
 export default function EasyImageReaderPage() {
-  const LATEST_VERSION = "2.2";
+  const LATEST_VERSION = "2.1";
   const RELEASE_DATE = "September 6, 2025";
   // IMPORTANT: Replace '#' with the actual link to your executable upon upload.
   const DOWNLOAD_LINK = "https://github.com/pstracci/EasyImageReader-/releases/tag/v1.0.0"; 
@@ -38,10 +38,12 @@ export default function EasyImageReaderPage() {
               </div>
             </div>
             <div className="flex-1 text-center">
-              {/* Ideally, replace this with a GIF or screenshot of the app */}
-              <div className="bg-gray-700 w-full h-64 rounded-md flex items-center justify-center text-gray-500">
-                [ App Screenshot or GIF ]
-              </div>
+              {/* GIF de demonstração do aplicativo */}
+              <img 
+                src="/gifs/demo-app.gif" 
+                alt="Demonstração do Easy Image Reader em ação"
+                className="w-full h-64 rounded-md object-contain"
+              />
             </div>
           </section>
 
@@ -117,3 +119,4 @@ export default function EasyImageReaderPage() {
     </div>
   );
 }
+
