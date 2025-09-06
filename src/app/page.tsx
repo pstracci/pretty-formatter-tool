@@ -18,7 +18,6 @@ import {
   X,
   Square,
   Eraser,
-  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -26,7 +25,6 @@ const LINE_LIMIT = 1000;
 const PLACEHOLDER_TEXT = '// Paste your code, or select a file to format...';
 
 const AboutModal = ({ onClose }: { onClose: () => void }) => (
-    // ... (O conteúdo do modal permanece o mesmo, sem alterações)
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
         <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full text-gray-300 border border-gray-700 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-4 border-b border-gray-700 sticky top-0 bg-gray-800">
@@ -100,7 +98,6 @@ export default function HomePage() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // ... (Todas as funções handle... e useEffect... permanecem as mesmas, sem alterações)
   const formatCode = useCallback(async (codeToFormat: string, language: string) => {
     const lines = codeToFormat.split('\n').length;
     if (isPristine || !codeToFormat || codeToFormat.trim() === '' || lines > LINE_LIMIT) {
@@ -235,15 +232,13 @@ export default function HomePage() {
     }
   };
 
-
   return (
     <div className="h-screen font-sans bg-gradient-to-br from-gray-900 to-slate-800 text-white flex flex-col">
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
       <div className="flex flex-1 overflow-hidden">
-        {/* A ESTRUTURA DO ASIDE VOLTOU PARA 2 SEÇÕES (TOPO E RODAPÉ) */}
         <aside className="w-72 bg-gray-900/50 p-6 flex flex-col justify-between border-r border-gray-700">
           
-          {/* SEÇÃO 1: TOPO (AGORA INCLUI AS FERRAMENTAS) */}
+          {/* SEÇÃO 1: TOPO */}
           <div>
             <h1 className="text-2xl font-bold text-emerald-400 flex items-center gap-2">
               <FileCode /> AI Formatter
@@ -285,7 +280,6 @@ export default function HomePage() {
               </div>
             </div>
             
-            {/* A SEÇÃO DE FERRAMENTAS FOI MOVIDA PARA CÁ */}
             <div className="mt-6 space-y-2 py-4 border-y border-gray-700">
                 <h3 className="text-sm font-semibold text-gray-300">Try Other Tools</h3>
                 <Link href="/oracle-optimizer" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
@@ -304,6 +298,17 @@ export default function HomePage() {
                 </div>
                 </Link>
             </div>
+
+            {/* === NOVO BLOCO DE CÓDIGO PARA APLICATIVOS === */}
+            <div className="mt-6 space-y-2 py-4 border-t border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-300">Desktop Apps</h3>
+                <Link href="/easy-image-reader" className="block text-sm text-emerald-400 hover:text-emerald-300 transition-colors p-2 rounded-md hover:bg-gray-800">
+                    <span className="font-bold">Easy Image Reader</span>
+                    <span className="block text-xs text-gray-400">free download</span>
+                </Link>
+                {/* Você pode adicionar mais apps aqui no futuro */}
+            </div>
+
           </div>
 
           {/* SEÇÃO 2: RODAPÉ */}
@@ -328,7 +333,7 @@ export default function HomePage() {
           </div>
         </aside>
 
-        {/* O restante da página (main, CodeMirror, etc.) permanece o mesmo */}
+        {/* O restante da página (main, CodeMirror, etc.) */}
         <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
           <div className="flex flex-col rounded-lg overflow-hidden border border-gray-700">
             <div className="bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-300 flex justify-between items-center">
