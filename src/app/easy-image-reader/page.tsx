@@ -77,7 +77,7 @@ export default function EasyImageReaderPage() {
                 <ul className="list-disc list-inside mt-2 text-gray-400 space-y-1">
                   <li>✨ Added option for audio feedback on copy.</li>
                   <li>✨ Added more default languages (Spanish, French, German).</li>
-                  <li>✨ Updated the "About" window with developer info.</li>
+                  <li>✨ Updated the &quot;About&quot; window with developer info.</li>
                   <li>🐞 Fixed `WinError 1114` bug that occurred on some systems when starting the compiled version.</li>
                 </ul>
               </div>
