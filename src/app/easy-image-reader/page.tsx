@@ -9,7 +9,7 @@ export default function EasyImageReaderPage() {
   const LATEST_VERSION = "2.3.0";
   const RELEASE_DATE = "September 8, 2025";
   // Link direto para o instalador da nova release
-  const DOWNLOAD_LINK = "https://github.com/pstracci/EasyImageReader-/releases/download/v2.3.0/EasyImageReader-Setup-v2.1.exe"; 
+  const DOWNLOAD_LINK = "https://github.com/pstracci/EasyImageReader-/releases/download/v2.3.0/EasyImageReader-Setup-v2.3.0.exe"; 
 
   return (
     <div className="font-sans bg-gradient-to-br from-gray-900 to-slate-800 text-white min-h-screen">
