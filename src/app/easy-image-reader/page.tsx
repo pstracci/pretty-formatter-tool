@@ -5,10 +5,11 @@ import { Download, HardDrive, Cpu, GitMerge } from 'lucide-react';
 import Link from 'next/link';
 
 export default function EasyImageReaderPage() {
-  const LATEST_VERSION = "2.1";
-  const RELEASE_DATE = "September 6, 2025";
-  // IMPORTANT: Replace '#' with the actual link to your executable upon upload.
-  const DOWNLOAD_LINK = "https://github.com/pstracci/EasyImageReader-/releases/tag/v1.0.0"; 
+  // --- VALORES ATUALIZADOS ---
+  const LATEST_VERSION = "2.3.0";
+  const RELEASE_DATE = "September 8, 2025";
+  // Link direto para o instalador da nova release
+  const DOWNLOAD_LINK = "https://github.com/pstracci/EasyImageReader-/releases/download/v2.3.0/EasyImageReader-Setup-v2.1.exe"; 
 
   return (
     <div className="font-sans bg-gradient-to-br from-gray-900 to-slate-800 text-white min-h-screen">
@@ -70,21 +71,34 @@ export default function EasyImageReaderPage() {
             </div>
           </section>
 
-          {/* Version History Section */}
+          {/* Version History Section (Changelog ATUALIZADO) */}
           <section>
             <h2 className="text-3xl font-bold text-center mb-8">Version History (Changelog)</h2>
             <div className="space-y-6 bg-gray-800/50 p-6 rounded-lg border border-gray-700">
+              {/* NOVA VERSÃO ADICIONADA AQUI */}
               <div>
-                <h3 className="font-semibold text-lg flex items-center gap-2"><GitMerge size={18} />Version 2.1 <span className="text-sm text-gray-500 font-normal">- {RELEASE_DATE}</span></h3>
+                <h3 className="font-semibold text-lg flex items-center gap-2"><GitMerge size={18} />Version 2.3.0 <span className="text-sm text-gray-500 font-normal">- {RELEASE_DATE}</span></h3>
+                <ul className="list-disc list-inside mt-2 text-gray-400 space-y-1">
+                  <li>🎉 **Windows Installer:** The application is now distributed with a full-featured installer for easy setup.</li>
+                  <li>✨ **Improved User Interface:** The Options window has been completely redesigned for better clarity and now has a fixed size to prevent layout issues.</li>
+                  <li>✨ **Enhanced Tray Icon Behavior:** Left-clicking the tray icon now directly starts the text capture, while right-clicking opens the full menu.</li>
+                  <li>🐞 **OCR Engine Fix:** Resolved a critical bug that prevented the OCR model from loading when multiple incompatible languages were selected.</li>
+                  <li>🐞 **UI Fixes:** The Options window no longer flashes on the screen corner before centering itself.</li>
+                </ul>
+              </div>
+              
+              <div className="pt-4 border-t border-gray-700">
+                <h3 className="font-semibold text-lg flex items-center gap-2"><GitMerge size={18} />Version 2.1 <span className="text-sm text-gray-500 font-normal">- Old release date</span></h3>
                 <ul className="list-disc list-inside mt-2 text-gray-400 space-y-1">
                   <li>✨ Added option for audio feedback on copy.</li>
                   <li>✨ Added more default languages (Spanish, French, German).</li>
                   <li>✨ Updated the &quot;About&quot; window with developer info.</li>
-                  <li>🐞 Fixed `WinError 1114` bug that occurred on some systems when starting the compiled version.</li>
+                  <li>🐞 Fixed a bug that occurred on some systems when starting the compiled version.</li>
                 </ul>
               </div>
+
                <div className="pt-4 border-t border-gray-700">
-                <h3 className="font-semibold text-lg flex items-center gap-2"><GitMerge size={18} />Version 2.0 <span className="text-sm text-gray-500 font-normal">- September 2025</span></h3>
+                <h3 className="font-semibold text-lg flex items-center gap-2"><GitMerge size={18} />Version 2.0 <span className="text-sm text-gray-500 font-normal">- Old release date</span></h3>
                 <ul className="list-disc list-inside mt-2 text-gray-400 space-y-1">
                     <li>🚀 Migrated OCR engine from Tesseract to EasyOCR, removing external dependencies.</li>
                     <li>✨ Added Options window (Start with Windows, GPU, Languages).</li>
@@ -119,4 +133,3 @@ export default function EasyImageReaderPage() {
     </div>
   );
 }
-
