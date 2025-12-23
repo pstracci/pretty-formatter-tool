@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Inter, Fira_Code } from "next/font/google"; // Importe Fira Code
 import "./globals.css";
 import AuthProvider from './context/AuthProvider';
@@ -39,9 +40,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
+      <head>
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5163169605078436"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      </head>
       {/* Combine as variáveis das fontes no className */}
       <body className={`${inter.variable} ${firaCode.variable} bg-gray-900 text-white`}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
